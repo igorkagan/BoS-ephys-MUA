@@ -212,7 +212,7 @@ For each **session × channel**:
 4. Compute mean left/right timecourses and **difference wave** `Δ(t) = μ_L(t) − μ_R(t)`.
 5. In the analysis window (default −500 to +500 ms relative to event):
    - Window-mean firing rates per trial (left vs right).
-   - **Selectivity index** `SI = (L̄ − R̄) / (|L̄| + |R̄|)` where L̄, R̄ are mean window rates.
+   - **Selectivity index** `SI = (L̄ − R̄) / (abs(L̄) + abs(R̄))` where L̄, R̄ are mean window rates.
    - **Mann–Whitney U** test on per-trial window means (two-sided).
 
 Channels need ≥ `MIN_TRIALS_PER_GROUP` trials per side to contribute statistics.
@@ -225,7 +225,7 @@ Channels need ≥ `MIN_TRIALS_PER_GROUP` trials per side to contribute statistic
 
 | Measure | Definition | Interpretation |
 |---|---|---|
-| **SI** | `(L̄ − R̄) / (|L̄| + |R̄|)` in analysis window | Signed L/R bias. **+** → left-preferring, **−** → right-preferring, **0** → balanced. Bounded in [−1, 1] when L̄, R̄ ≥ 0. |
+| **SI** | `(L̄ − R̄) / (abs(L̄) + abs(R̄))` in analysis window | Signed L/R bias. **+** → left-preferring, **−** → right-preferring, **0** → balanced. Bounded in [−1, 1] when L̄, R̄ ≥ 0. |
 | **Δ(t)** | `μ_L(t) − μ_R(t)` at each time point | Full timecourse of L vs R difference; used for shape-based comparisons. |
 | **Mann–Whitney p** | On per-trial window means (L vs R) | Non-parametric test of L/R difference within session. Not corrected for multiple channels. |
 | **Median pairwise r** | Median Pearson r of **Δ(t)** across all session pairs for one channel | **Shape** consistency: do difference-waveforms correlate across days? High r → similar temporal profile; low/negative r → drift or remapping. |
@@ -248,7 +248,7 @@ Use these first to see which channels and sessions are worth inspecting.
 
 | File | What it shows | How to read it |
 |---|---|---|
-| **`si_heatmap.pdf`** | Heatmap of SI for every session (columns) × channel (rows). Diverging **RdBu_r**; symmetric color limits ± max \|SI\|. | Scan for vertical stripes (session effects) vs horizontal bands (array/channel structure). Stable channels show similar color across sessions. |
+| **`si_heatmap.pdf`** | Heatmap of SI for every session (columns) × channel (rows). Diverging **RdBu_r**; symmetric color limits ± max abs(SI). | Scan for vertical stripes (session effects) vs horizontal bands (array/channel structure). Stable channels show similar color across sessions. |
 | **`signed_sig_heatmap.pdf`** | `sign(SI) × −log10(p)`; entries with **p ≥ α** (default 0.05) are scaled to 25% intensity. | Combines direction and significance. Bright saturated cells = significant L/R difference in that session; faint = non-significant. |
 | **`session_similarity.pdf`** | Square matrix: pairwise session similarity (median r of Δ across channels). **Viridis**, range [−1, 1]. | Diagonal = 1. Off-diagonal blocks reveal clusters of “similar” recording days; low similarity suggests poor cross-session comparability for that pair. |
 | **`si_stability_{A1–A5}.pdf`** | Two panels per array. **Top:** scatter of SI in each session vs SI in **reference session** (earliest by default); points colored by session (`cool`); dashed unity line. **Bottom:** violin plot of SI across sessions, one violin per channel in the array. | Top: channels on the unity line are stable in SI magnitude/sign vs reference. Bottom: wide violins = high cross-session SI variability; narrow = stable tuning. |
