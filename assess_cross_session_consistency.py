@@ -24,7 +24,17 @@ from bos_mua.io import (
     window_indices,
 )
 from bos_mua.preprocess import processing_label, resolve_figures_dir
-from bos_mua.stability import assess_channel_stability, session_similarity_matrix
+from bos_mua.stability import (
+    assess_channel_stability,
+    rank_best_worst_channels,
+    rank_tuned_stable_channels,
+    session_similarity_matrix,
+)
+from bos_mua.tensors import (
+    build_tensors,
+    channel_presence_matrix,
+    write_channel_presence_csv,
+)
 from bos_mua.viz_consistency import (
     plot_deep_dive_channel,
     plot_delta_consensus_array,
@@ -32,6 +42,8 @@ from bos_mua.viz_consistency import (
     plot_si_heatmap,
     plot_si_stability_by_array,
     plot_signed_sig_heatmap,
+    stability_deep_dive_title,
+    tuned_stable_deep_dive_title,
     write_stability_csv,
 )
 
@@ -40,7 +52,7 @@ from bos_mua.viz_consistency import (
 # ---------------------------------------------------------------------------
 
 DATA_ROOT = r"S:\taskcontroller\SCP_DATA\SCP-CTRL-01\MUA_curated_sessions"
-CONDITION_FOLDER = "Elmo_BLOCKED"
+CONDITION_FOLDER = "Curius_BLOCKED"
 SESSION_IDS = None  # None = auto-discover all sessions in folder
 REFERENCE_SESSION = None  # None = earliest by date in session ID
 
@@ -75,40 +87,14 @@ FIG_SIZE_IN = (11, 8.5)
 
 DEEP_DIVE_UNSTABLE_ONLY = True
 MAX_DEEP_DIVE_CHANNELS = 20
+BEST_WORST_N = 10
+TUNED_STABLE_N = 10
+TUNED_STABLE_SI_STD_MAX = 0.30
+TUNED_STABLE_SI_ABS_MIN = 0.10
 
 OUTPUT_DIR = r"./figures/consistency"
 
 # ---------------------------------------------------------------------------
-
-
-def build_tensors(
-    all_summaries: list[ChannelSummary],
-    session_ids: list[str],
-) -> tuple[list[int], np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    channels = sorted({s.channel for s in all_summaries})
-    ch_to_idx = {ch: i for i, ch in enumerate(channels)}
-    sess_to_idx = {sid: i for i, sid in enumerate(session_ids)}
-
-    n_sess = len(session_ids)
-    n_ch = len(channels)
-    t_ms = all_summaries[0].t_ms
-    n_time = len(t_ms)
-
-    si_matrix = np.full((n_sess, n_ch), np.nan)
-    p_matrix = np.full((n_sess, n_ch), np.nan)
-    diff_tensor = np.full((n_sess, n_ch, n_time), np.nan)
-
-    for s in all_summaries:
-        si = sess_to_idx.get(s.session_id)
-        ci = ch_to_idx.get(s.channel)
-        if si is None or ci is None:
-            continue
-        si_matrix[si, ci] = s.si
-        if s.mwu_p is not None:
-            p_matrix[si, ci] = s.mwu_p
-        diff_tensor[si, ci] = s.diff
-
-    return channels, si_matrix, p_matrix, diff_tensor, t_ms
 
 
 def summaries_lookup(all_summaries: list[ChannelSummary]) -> dict[str, dict[int, ChannelSummary]]:
@@ -116,6 +102,98 @@ def summaries_lookup(all_summaries: list[ChannelSummary]) -> dict[str, dict[int,
     for s in all_summaries:
         out[s.session_id][s.channel] = s
     return dict(out)
+
+
+def compute_stabilities(
+    channels: list[int],
+    si_matrix: np.ndarray,
+    diff_tensor: np.ndarray,
+) -> tuple[list, dict[int, object]]:
+    stabilities = []
+    stab_by_ch: dict[int, object] = {}
+    for ch in channels:
+        ch_idx = ch - 1
+        traces = diff_tensor[:, ch_idx, :]
+        valid_sess = np.any(np.isfinite(traces), axis=1)
+        if int(valid_sess.sum()) < MIN_SESSIONS:
+            continue
+        traces_present = traces[valid_sess]
+        si_vals = si_matrix[valid_sess, ch_idx]
+        array_name = ARRAY_NAMES[(ch - 1) // CHANNELS_PER_ARRAY]
+        stab = assess_channel_stability(
+            ch, array_name, traces_present, si_vals,
+            R_STABLE_THRESH, ICC_STABLE_THRESH, SIGN_CONCORDANCE_THRESH,
+        )
+        stabilities.append(stab)
+        stab_by_ch[ch] = stab
+    return stabilities, stab_by_ch
+
+
+def plot_best_worst_channels(
+    lookup: dict[str, dict[int, ChannelSummary]],
+    session_ids: list[str],
+    stabilities: list,
+    win_idx: np.ndarray,
+    base_title: str,
+    output_dir: Path,
+    n: int = BEST_WORST_N,
+) -> None:
+    best, worst = rank_best_worst_channels(stabilities, n=n)
+    for stab in best:
+        plot_deep_dive_channel(
+            lookup, session_ids, stab.channel, win_idx,
+            stability_deep_dive_title(base_title, "best10", stab),
+            output_dir / f"best10_ch{stab.channel:03d}.pdf",
+        )
+    for stab in worst:
+        plot_deep_dive_channel(
+            lookup, session_ids, stab.channel, win_idx,
+            stability_deep_dive_title(base_title, "worst10", stab),
+            output_dir / f"worst10_ch{stab.channel:03d}.pdf",
+        )
+    if best or worst:
+        print(
+            f"Saved {len(best)} best10 + {len(worst)} worst10 deep-dive PDFs "
+            f"(ranked by median pairwise r)"
+        )
+
+
+def plot_tuned_stable_channels(
+    lookup: dict[str, dict[int, ChannelSummary]],
+    session_ids: list[str],
+    stabilities: list,
+    win_idx: np.ndarray,
+    base_title: str,
+    output_dir: Path,
+    n: int = TUNED_STABLE_N,
+    sign_thresh: float = SIGN_CONCORDANCE_THRESH,
+    si_std_max: float = TUNED_STABLE_SI_STD_MAX,
+    si_abs_min: float = TUNED_STABLE_SI_ABS_MIN,
+) -> list:
+    tuned = rank_tuned_stable_channels(
+        stabilities, n=n,
+        sign_thresh=sign_thresh,
+        si_std_max=si_std_max,
+        si_abs_min=si_abs_min,
+    )
+    if len(tuned) < n:
+        warnings.warn(
+            f"Only {len(tuned)} channels pass tuned-stable gate "
+            f"(sign>={sign_thresh}, si_std<={si_std_max}, median|SI|>={si_abs_min}); "
+            f"requested {n}"
+        )
+    for stab in tuned:
+        plot_deep_dive_channel(
+            lookup, session_ids, stab.channel, win_idx,
+            tuned_stable_deep_dive_title(base_title, stab),
+            output_dir / f"best10_tuned_stable_ch{stab.channel:03d}.pdf",
+        )
+    if tuned:
+        print(
+            f"Saved {len(tuned)} best10_tuned_stable deep-dive PDFs "
+            f"(ranked by median |SI|, SI-stable gate)"
+        )
+    return tuned
 
 
 def run_consistency(
@@ -148,7 +226,7 @@ def run_consistency(
                 zscore_mua=zscore_mua,
             )
             all_summaries.extend(summaries)
-            print(f"  {sid}: {len(summaries)} channels")
+            print(f"  {sid}: {len(summaries)} channels with data")
         except Exception as exc:
             warnings.warn(f"Skipping {sid} ({label}): {exc}")
 
@@ -156,26 +234,12 @@ def run_consistency(
         raise RuntimeError(f"No channel summaries extracted ({label}).")
 
     channels, si_matrix, p_matrix, diff_tensor, t_ms = build_tensors(all_summaries, session_ids)
+    presence = channel_presence_matrix(all_summaries, session_ids)
+    write_channel_presence_csv(session_ids, presence, output_dir / "channel_presence.csv")
     win_idx = window_indices(t_ms, ANALYSIS_WINDOW_MS)
     lookup = summaries_lookup(all_summaries)
 
-    stabilities = []
-    stab_by_ch: dict[int, object] = {}
-    for ch in channels:
-        ch_idx = channels.index(ch)
-        traces = diff_tensor[:, ch_idx, :]
-        valid_sess = np.any(np.isfinite(traces), axis=1)
-        if valid_sess.sum() < MIN_SESSIONS:
-            continue
-        traces = traces[valid_sess]
-        si_vals = si_matrix[valid_sess, ch_idx]
-        array_name = ARRAY_NAMES[(ch - 1) // CHANNELS_PER_ARRAY]
-        stab = assess_channel_stability(
-            ch, array_name, traces, si_vals,
-            R_STABLE_THRESH, ICC_STABLE_THRESH, SIGN_CONCORDANCE_THRESH,
-        )
-        stabilities.append(stab)
-        stab_by_ch[ch] = stab
+    stabilities, stab_by_ch = compute_stabilities(channels, si_matrix, diff_tensor)
 
     base_title = f"{CONDITION_FOLDER} | {ALIGNMENT_EVENT} | {filter_summary(TRIAL_FILTERS)} | {processing_label(GAUSSIAN_SMOOTH_MS, zscore_mua)}"
 
@@ -215,8 +279,11 @@ def run_consistency(
         )
 
     csv_path = output_dir / "channel_stability.csv"
-    write_stability_csv(stabilities, csv_path)
-    print(f"Saved {csv_path} ({sum(s.stable for s in stabilities)} stable / {len(stabilities)} channels)")
+    tuned_stable = plot_tuned_stable_channels(
+        lookup, session_ids, stabilities, win_idx, base_title, output_dir, n=TUNED_STABLE_N,
+    )
+    write_stability_csv(stabilities, csv_path, tuned_stable=tuned_stable)
+    print(f"Saved {csv_path} ({sum(s.stable for s in stabilities)} stable / {len(stabilities)} channels with >={MIN_SESSIONS} sessions)")
 
     unstable = [s for s in stabilities if not s.stable]
     unstable.sort(key=lambda s: (s.median_pairwise_r if np.isfinite(s.median_pairwise_r) else 999))
@@ -233,6 +300,10 @@ def run_consistency(
         )
     if dive_channels:
         print(f"Saved {len(dive_channels)} deep-dive PDFs")
+
+    plot_best_worst_channels(
+        lookup, session_ids, stabilities, win_idx, base_title, output_dir, n=BEST_WORST_N,
+    )
 
     print(f"Done ({label}). Outputs in {output_dir}")
 

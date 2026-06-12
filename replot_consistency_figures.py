@@ -19,9 +19,9 @@ from assess_cross_session_consistency import (
     SESSION_IDS,
     TRIAL_FILTERS,
     ZSCORE_MUA,
-    build_tensors,
     filter_summary,
 )
+from bos_mua.tensors import build_tensors
 from bos_mua.features import extract_session_summaries
 from bos_mua.io import discover_sessions
 from bos_mua.preprocess import processing_label, resolve_figures_dir

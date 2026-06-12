@@ -12,6 +12,16 @@ INVALID_LABELS = frozenset({"NONE", "None", "none", ""})
 
 CHANNELS_PER_ARRAY = 32
 ARRAY_NAMES = ["A1", "A2", "A3", "A4", "A5"]
+NOMINAL_CHANNELS = len(ARRAY_NAMES) * CHANNELS_PER_ARRAY  # 160
+
+
+def nominal_channel_list() -> list[int]:
+    return list(range(1, NOMINAL_CHANNELS + 1))
+
+
+def array_nominal_channels(array_index: int) -> list[int]:
+    start = array_index * CHANNELS_PER_ARRAY
+    return list(range(start + 1, start + CHANNELS_PER_ARRAY + 1))
 
 
 def as_str_array(field) -> np.ndarray:
@@ -83,6 +93,17 @@ def discover_channel_files(event_dir: Path) -> list[Path]:
     return files
 
 
+def channel_files_by_number(event_dir: Path) -> dict[int, Path]:
+    """Map nominal channel number (1–160) to its event-aligned file, if present."""
+    out: dict[int, Path] = {}
+    for path in discover_channel_files(event_dir):
+        try:
+            out[channel_number(path)] = path
+        except ValueError:
+            continue
+    return out
+
+
 def discover_sessions(condition_dir: Path) -> list[str]:
     sessions = [p.name for p in condition_dir.iterdir() if p.is_dir()]
     return sorted(sessions, key=session_sort_key)
@@ -111,6 +132,7 @@ def channel_label(ch_num: int, array_name: str, index_in_array: int) -> str:
 
 
 def array_channel_files(all_files: list[Path], array_index: int) -> list[Path]:
+    """Legacy helper: slice sorted file list by array index (assumes contiguous ch001–ch160 files)."""
     start = array_index * CHANNELS_PER_ARRAY
     return all_files[start : start + CHANNELS_PER_ARRAY]
 

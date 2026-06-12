@@ -9,7 +9,7 @@ import numpy as np
 from matplotlib.colors import Normalize
 
 from bos_mua.features import ChannelSummary
-from bos_mua.io import ARRAY_NAMES, CHANNELS_PER_ARRAY, channel_label
+from bos_mua.io import ARRAY_NAMES, CHANNELS_PER_ARRAY, array_nominal_channels, channel_label
 from bos_mua.stability import ChannelStability
 
 LEFT_COLOR = "#d62728"
@@ -135,6 +135,20 @@ def plot_session_similarity(
     plt.close(fig)
 
 
+def _channel_col(ch_num: int, channels: list[int]) -> int:
+    """Column index in session × channel matrices (channels are 1…160)."""
+    if channels[0] == 1 and len(channels) == 160:
+        return ch_num - 1
+    return channels.index(ch_num)
+
+
+def _mark_empty_axis(ax, title: str, reason: str) -> None:
+    ax.set_title(f"{title}\n[{reason}]", fontsize=8)
+    ax.text(0.5, 0.5, reason, transform=ax.transAxes, ha="center", va="center", fontsize=8, color="0.45")
+    ax.set_xticks([])
+    ax.set_yticks([])
+
+
 def plot_si_stability_by_array(
     si_matrix: np.ndarray,
     session_ids: list[str],
@@ -145,12 +159,8 @@ def plot_si_stability_by_array(
     out_path: Path,
     session_colormap: str = "cool",
 ) -> None:
-    ch_mask = [
-        i for i, ch in enumerate(channels)
-        if (ch - 1) // CHANNELS_PER_ARRAY == ARRAY_NAMES.index(array_name)
-    ]
-    if not ch_mask:
-        return
+    ch_nums = array_nominal_channels(ARRAY_NAMES.index(array_name))
+    ch_cols = [_channel_col(ch, channels) for ch in ch_nums]
 
     session_labels = _session_short_labels(session_ids)
     session_colors = _session_colors(len(session_ids), session_colormap)
@@ -159,16 +169,16 @@ def plot_si_stability_by_array(
     fig, axes = plt.subplots(2, 1, figsize=(11, 9))
 
     ax = axes[0]
-    ref_si = si_matrix[reference_idx, ch_mask]
-    ch_nums = [channels[i] for i in ch_mask]
+    ref_si = si_matrix[reference_idx, ch_cols]
     for s_idx in range(si_matrix.shape[0]):
-        y = si_matrix[s_idx, ch_mask]
+        y = si_matrix[s_idx, ch_cols]
         ax.scatter(
             ref_si, y,
             s=18, alpha=0.65, color=session_colors[s_idx],
             label=session_labels[s_idx], edgecolors="none",
         )
-    lims = [np.nanmin(si_matrix[:, ch_mask]), np.nanmax(si_matrix[:, ch_mask])]
+    slice_data = si_matrix[:, ch_cols]
+    lims = [np.nanmin(slice_data), np.nanmax(slice_data)]
     if np.all(np.isfinite(lims)):
         ax.plot(lims, lims, "k--", linewidth=0.8, alpha=0.5, label="unity (SI_ref = SI)")
     ax.set_xlabel(f"SI in reference session ({ref_label})")
@@ -184,15 +194,25 @@ def plot_si_stability_by_array(
     )
 
     ax = axes[1]
-    data = [si_matrix[:, i] for i in ch_mask]
-    parts = ax.violinplot(data, showmedians=True, showextrema=False)
-    for body in parts["bodies"]:
-        body.set_facecolor("#aec7e8")
-        body.set_alpha(0.7)
-    if "cmedians" in parts:
-        parts["cmedians"].set_color("k")
+    positions = []
+    plot_data = []
+    tick_labels = []
+    for pos, (ch_num, col) in enumerate(zip(ch_nums, ch_cols, strict=True), start=1):
+        vals = si_matrix[:, col]
+        finite = vals[np.isfinite(vals)]
+        tick_labels.append(f"{ch_num}")
+        if finite.size >= 2:
+            positions.append(pos)
+            plot_data.append(finite)
+    if plot_data:
+        parts = ax.violinplot(plot_data, positions=positions, showmedians=True, showextrema=False)
+        for body in parts["bodies"]:
+            body.set_facecolor("#aec7e8")
+            body.set_alpha(0.7)
+        if "cmedians" in parts:
+            parts["cmedians"].set_color("k")
     ax.set_xticks(range(1, len(ch_nums) + 1))
-    ax.set_xticklabels([f"{c}" for c in ch_nums], fontsize=6, rotation=90)
+    ax.set_xticklabels(tick_labels, fontsize=6, rotation=90)
     ax.set_ylabel("SI across sessions")
     ax.set_xlabel("Channel")
     ax.set_title(f"{array_name}: SI distribution across sessions (one violin per channel)")
@@ -226,17 +246,20 @@ def plot_delta_consensus_array(
     axes_flat = axes.ravel()
     colors = _session_colors(len(session_ids), session_colormap)
 
-    ch_start = array_index * CHANNELS_PER_ARRAY
-    ch_end = ch_start + CHANNELS_PER_ARRAY
+    ch_nums = array_nominal_channels(array_index)
+    array_name = ARRAY_NAMES[array_index]
 
     for panel_idx, ax in enumerate(axes_flat):
-        ch_num = ch_start + panel_idx + 1
-        if ch_num > ch_end or ch_num not in channels:
-            ax.axis("off")
-            continue
-
-        ch_idx = channels.index(ch_num)
+        ch_num = ch_nums[panel_idx]
+        _, idx_in_array = divmod(ch_num - 1, CHANNELS_PER_ARRAY)
+        title = channel_label(ch_num, array_name, idx_in_array + 1)
+        ch_idx = _channel_col(ch_num, channels)
         traces = diff_tensor[:, ch_idx, :]
+        has_data = np.any(np.isfinite(traces))
+
+        if not has_data:
+            _mark_empty_axis(ax, title, "missing")
+            continue
 
         if show_session_traces:
             for s_idx, trace in enumerate(traces):
@@ -247,6 +270,10 @@ def plot_delta_consensus_array(
         median = np.nanmedian(traces, axis=0)
         q25 = np.nanpercentile(traces, 25, axis=0)
         q75 = np.nanpercentile(traces, 75, axis=0)
+        if not np.any(np.isfinite(median)):
+            _mark_empty_axis(ax, title, "no data")
+            continue
+
         ax.plot(t_ms, median, color="k", linewidth=1.4, zorder=5)
         ax.fill_between(t_ms, q25, q75, color="0.7", alpha=0.35, zorder=4)
 
@@ -268,8 +295,7 @@ def plot_delta_consensus_array(
                 bbox=dict(boxstyle="round,pad=0.2", facecolor="white", alpha=0.75, edgecolor="none"),
             )
 
-        _, idx_in_array = divmod(ch_num - 1, CHANNELS_PER_ARRAY)
-        ax.set_title(channel_label(ch_num, array_name, idx_in_array + 1), fontsize=8)
+        ax.set_title(title, fontsize=8)
         ax.tick_params(labelsize=6)
         ax.set_xlim(t_ms[0], t_ms[-1])
 
@@ -288,6 +314,15 @@ def plot_delta_consensus_array(
     fig.tight_layout(rect=[0, 0, 1, 0.98])
     fig.savefig(out_path, format="pdf", dpi=150, bbox_inches="tight")
     plt.close(fig)
+
+
+def stability_deep_dive_title(base_title: str, label: str, stab: ChannelStability) -> str:
+    flag = "stable" if stab.stable else "unstable"
+    return (
+        f"{base_title} | {label} ch{stab.channel:03d} ({stab.array_name})\n"
+        f"median r={stab.median_pairwise_r:.2f}  ICC={stab.icc:.2f}  "
+        f"sign={stab.n_same_sign}/{stab.n_sessions}  {flag}"
+    )
 
 
 def plot_deep_dive_channel(
@@ -321,8 +356,10 @@ def plot_deep_dive_channel(
         ax = axes_flat[idx]
         s = summaries_by_session.get(sid, {}).get(channel)
         if s is None:
-            ax.set_title(sid.split(".")[0], fontsize=7)
-            ax.axis("off")
+            ax.set_title(f"{sid.split('.')[0]}\n[missing]", fontsize=6)
+            ax.text(0.5, 0.5, "missing", transform=ax.transAxes, ha="center", va="center", fontsize=8, color="0.45")
+            ax.set_xticks([])
+            ax.set_yticks([])
             continue
 
         if np.any(np.isfinite(s.mean_left)):
@@ -347,12 +384,33 @@ def plot_deep_dive_channel(
     plt.close(fig)
 
 
-def write_stability_csv(stabilities: list[ChannelStability], out_path: Path) -> None:
+def tuned_stable_deep_dive_title(base_title: str, stab: ChannelStability) -> str:
+    return (
+        f"{base_title} | best10_tuned_stable ch{stab.channel:03d} ({stab.array_name})\n"
+        f"median |SI|={stab.si_median_abs:.2f}  si_std={stab.si_std:.2f}  "
+        f"sign={stab.n_same_sign}/{stab.n_sessions}  "
+        f"median r={stab.median_pairwise_r:.2f}"
+    )
+
+
+def write_stability_csv(
+    stabilities: list[ChannelStability],
+    out_path: Path,
+    tuned_stable: list[ChannelStability] | None = None,
+) -> None:
     if not stabilities:
         return
+    rank_map = {}
+    if tuned_stable:
+        rank_map = {s.channel: i + 1 for i, s in enumerate(tuned_stable)}
     fieldnames = list(asdict(stabilities[0]).keys())
+    if rank_map:
+        fieldnames = fieldnames + ["tuned_stable_rank"]
     with out_path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         for row in stabilities:
-            writer.writerow(asdict(row))
+            d = asdict(row)
+            if rank_map:
+                d["tuned_stable_rank"] = rank_map.get(row.channel, "")
+            writer.writerow(d)

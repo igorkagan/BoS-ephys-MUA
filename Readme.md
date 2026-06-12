@@ -180,7 +180,7 @@ mua_sel = mua[blocked_dyadic_rewarded_monkeyfirst & row_ok]
 
 ## Cross-session consistency
 
-Nominal channel IDs (`ch001`–`ch160`) are physical electrode indices and may not reflect the same neural tissue across days (electrode drift). Before pooling or comparing channels across sessions, run consistency checks within a condition folder.
+Nominal channel IDs (`ch001`–`ch160`) are physical electrode indices and may not reflect the same neural tissue across days (electrode drift). **Channels can be missing** in individual sessions (no file or insufficient trials); the pipeline always uses the fixed A1–A5 layout (ch001–032 … ch129–160), assigns **NaN** where data are absent, and shows **empty labelled axes** in overview plots. Stability metrics use only sessions where that channel had usable data.
 
 **Script:** `assess_cross_session_consistency.py` — compares all sessions in one condition (e.g. `Elmo_BLOCKED`).
 
@@ -252,7 +252,8 @@ Use these first to see which channels and sessions are worth inspecting.
 | **`signed_sig_heatmap.pdf`** | `sign(SI) × −log10(p)`; entries with **p ≥ α** (default 0.05) are scaled to 25% intensity. | Combines direction and significance. Bright saturated cells = significant L/R difference in that session; faint = non-significant. |
 | **`session_similarity.pdf`** | Square matrix: pairwise session similarity (median r of Δ across channels). **Viridis**, range [−1, 1]. | Diagonal = 1. Off-diagonal blocks reveal clusters of “similar” recording days; low similarity suggests poor cross-session comparability for that pair. |
 | **`si_stability_{A1–A5}.pdf`** | Two panels per array. **Top:** scatter of SI in each session vs SI in **reference session** (earliest by default); points colored by session (`cool`); dashed unity line. **Bottom:** violin plot of SI across sessions, one violin per channel in the array. | Top: channels on the unity line are stable in SI magnitude/sign vs reference. Bottom: wide violins = high cross-session SI variability; narrow = stable tuning. |
-| **`channel_stability.csv`** | One row per channel: `median_pairwise_r`, `icc`, `sign_concordance`, `n_same_sign`, `si_mean`, `si_std`, `stable`. | Sort by `median_pairwise_r` or filter `stable == True` for channels safe to aggregate. Primary quantitative summary. |
+| **`channel_stability.csv`** | One row per channel with ≥ `MIN_SESSIONS` present: `median_pairwise_r`, `icc`, `sign_concordance`, `n_same_sign`, `si_mean`, `si_std`, `stable`. | Sort by `median_pairwise_r` or filter `stable == True` for channels safe to aggregate. Primary quantitative summary. |
+| **`channel_presence.csv`** | Per session × array: count and list of **missing** nominal channels. | Use to see which electrodes were absent or failed QC in each recording. |
 
 #### Tier 2 — Difference-wave consensus (per array)
 
@@ -264,6 +265,8 @@ Use these first to see which channels and sessions are worth inspecting.
 
 | File | What it shows | How to read it |
 |---|---|---|
+| **`best10_ch*.pdf`**, **`worst10_ch*.pdf`** | L/R deep dive for top/bottom 10 by **median pairwise r** of Δ waveforms. | See [best-and-worst-channels.md](best-and-worst-channels.md). |
+| **`best10_tuned_stable_ch*.pdf`** | L/R deep dive for top 10 **strongly tuned** channels with **stable SI** across sessions. | See [best10-tuned-stable-channels.md](best10-tuned-stable-channels.md). |
 | **`deep_dive_ch{NNN}.pdf`** | 2×5 grid: one mini-panel per session for a single channel. **Red** = mean left-choice trials, **blue** = mean right-choice trials; shared y-axis; analysis window shaded. Title includes trial counts (L, R). | Generated for the **least stable** channels (default: top 20 by lowest median pairwise r among unstable). Inspect whether instability comes from amplitude scaling, timing shifts, sign flips, or missing data. Compare to Tier 2 consensus for the same channel. |
 
 ---

@@ -19,12 +19,11 @@ from scipy.stats import mannwhitneyu
 from bos_mua.io import (
     ARRAY_NAMES,
     CHANNELS_PER_ARRAY,
-    array_channel_files,
+    array_nominal_channels,
+    channel_files_by_number,
     channel_label,
-    channel_number,
     choice_mask,
     build_base_mask,
-    discover_channel_files,
     discover_sessions,
     filter_summary,
     gaussian_smooth_trials,
@@ -40,7 +39,7 @@ from bos_mua.preprocess import processing_label, resolve_figures_dir, zscore_cha
 # ---------------------------------------------------------------------------
 
 DATA_ROOT = r"S:\taskcontroller\SCP_DATA\SCP-CTRL-01\MUA_curated_sessions"
-CONDITION_FOLDER = "Elmo_BLOCKED"
+CONDITION_FOLDER = "Curius_BLOCKED"
 SESSION_ID = None  # None = all sessions in CONDITION_FOLDER; or set a single session ID
 ALIGNMENT_EVENT = "A_InitialFixationReleaseTime_ms"
 PRE_POST_TAG = "pre1000ms.post1000ms"
@@ -168,9 +167,16 @@ def plot_channel_subplot(
     _set_tight_ylim(ax, left_trials, right_trials)
 
 
+def _mark_empty_axis(ax, title: str, reason: str) -> None:
+    ax.set_title(f"{title}\n[{reason}]", fontsize=8)
+    ax.text(0.5, 0.5, reason, transform=ax.transAxes, ha="center", va="center", fontsize=8, color="0.45")
+    ax.set_xticks([])
+    ax.set_yticks([])
+
+
 def make_array_figure(
-    array_name: str,
-    channel_files: list[Path],
+    array_index: int,
+    channel_paths: dict[int, Path],
     t_ms: np.ndarray,
     win_idx: np.ndarray,
     left_mask: np.ndarray,
@@ -178,17 +184,21 @@ def make_array_figure(
     suptitle: str,
     zscore_mua: bool,
 ) -> plt.Figure:
+    array_name = ARRAY_NAMES[array_index]
+    ch_nums = array_nominal_channels(array_index)
     n_rows, n_cols = SUBPLOT_GRID
     fig, axes = plt.subplots(n_rows, n_cols, figsize=FIG_SIZE_IN, sharex=True, sharey=False)
     axes_flat = axes.ravel()
 
     for panel_idx, ax in enumerate(axes_flat):
-        if panel_idx >= len(channel_files):
-            ax.axis("off")
+        ch_num = ch_nums[panel_idx]
+        title = channel_label(ch_num, array_name, panel_idx + 1)
+        ch_path = channel_paths.get(ch_num)
+
+        if ch_path is None:
+            _mark_empty_axis(ax, title, "missing")
             continue
 
-        ch_path = channel_files[panel_idx]
-        ch_num = channel_number(ch_path)
         mua = loadmat(ch_path)["cur_output_data"]
         if zscore_mua:
             mua = zscore_channel_trials(mua)
@@ -196,7 +206,10 @@ def make_array_figure(
 
         left_trials = gaussian_smooth_trials(mua[left_mask & row_ok], t_ms, GAUSSIAN_SMOOTH_MS)
         right_trials = gaussian_smooth_trials(mua[right_mask & row_ok], t_ms, GAUSSIAN_SMOOTH_MS)
-        title = channel_label(ch_num, array_name, panel_idx + 1)
+
+        if left_trials.size == 0 and right_trials.size == 0:
+            _mark_empty_axis(ax, title, "no data")
+            continue
 
         plot_channel_subplot(ax, t_ms, left_trials, right_trials, win_idx, title)
 
@@ -233,7 +246,7 @@ def plot_session(session_id: str, output_dir: Path, zscore_mua: bool) -> None:
     if win_idx.size == 0:
         raise ValueError(f"No time points in analysis window {ANALYSIS_WINDOW_MS}")
 
-    channel_files = discover_channel_files(event_dir)
+    channel_paths = channel_files_by_number(event_dir)
 
     summary = filter_summary(TRIAL_FILTERS)
     proc_label = processing_label(GAUSSIAN_SMOOTH_MS, zscore_mua)
@@ -244,15 +257,9 @@ def plot_session(session_id: str, output_dir: Path, zscore_mua: bool) -> None:
         f"trials L={n_left}, R={n_right}"
     )
 
-    n_arrays = int(np.ceil(len(channel_files) / CHANNELS_PER_ARRAY))
-    for array_index in range(n_arrays):
-        array_name = ARRAY_NAMES[array_index] if array_index < len(ARRAY_NAMES) else f"A{array_index + 1}"
-        ch_files = array_channel_files(channel_files, array_index)
-        if not ch_files:
-            continue
-
+    for array_index, array_name in enumerate(ARRAY_NAMES):
         fig = make_array_figure(
-            array_name, ch_files, t_ms, win_idx, left_mask, right_mask,
+            array_index, channel_paths, t_ms, win_idx, left_mask, right_mask,
             f"{suptitle_base} | {array_name}",
             zscore_mua,
         )
