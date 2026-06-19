@@ -23,7 +23,7 @@ from bos_mua.io import (
     session_sort_key,
     window_indices,
 )
-from bos_mua.preprocess import processing_label, resolve_figures_dir
+from bos_mua.preprocess import processing_label, resolve_consistency_dir, trial_filters_for_condition
 from bos_mua.stability import (
     assess_channel_stability,
     rank_best_worst_channels,
@@ -59,12 +59,7 @@ REFERENCE_SESSION = None  # None = earliest by date in session ID
 ALIGNMENT_EVENT = "A_InitialFixationReleaseTime_ms"
 PRE_POST_TAG = "pre1000ms.post1000ms"
 
-TRIAL_FILTERS = {
-    "TrialSubType_list": ["Dyadic"],
-    "conf_predictability_list": ["Blocked"],
-    "go_seq_500_list": ["AgoB"],
-    "A_Reward_list": ["RA1", "RA2", "RA3", "RA4"],
-}
+TRIAL_FILTERS: dict[str, list[str]] | None = None  # None = auto from CONDITION_FOLDER
 LEFT_CHOICE = ["Al"]
 RIGHT_CHOICE = ["Ar"]
 
@@ -92,9 +87,15 @@ TUNED_STABLE_N = 10
 TUNED_STABLE_SI_STD_MAX = 0.30
 TUNED_STABLE_SI_ABS_MIN = 0.10
 
-OUTPUT_DIR = r"./figures/consistency"
+OUTPUT_DIR = r"./figures"
 
 # ---------------------------------------------------------------------------
+
+
+def effective_trial_filters() -> dict[str, list[str]]:
+    if TRIAL_FILTERS is not None:
+        return TRIAL_FILTERS
+    return trial_filters_for_condition(CONDITION_FOLDER)
 
 
 def summaries_lookup(all_summaries: list[ChannelSummary]) -> dict[str, dict[int, ChannelSummary]]:
@@ -203,10 +204,11 @@ def run_consistency(
     ref_idx: int,
     zscore_mua: bool,
 ) -> None:
-    output_dir = resolve_figures_dir(OUTPUT_DIR, zscore_mua) / CONDITION_FOLDER
+    output_dir = resolve_consistency_dir(OUTPUT_DIR, zscore_mua, CONDITION_FOLDER)
     output_dir.mkdir(parents=True, exist_ok=True)
     label = "z-scored" if zscore_mua else "original"
 
+    trial_filters = effective_trial_filters()
     print(f"\n=== {label} | Processing {len(session_ids)} sessions -> {output_dir} ===")
     all_summaries: list[ChannelSummary] = []
     for sid in session_ids:
@@ -217,7 +219,7 @@ def run_consistency(
                 sid,
                 ALIGNMENT_EVENT,
                 PRE_POST_TAG,
-                TRIAL_FILTERS,
+                trial_filters,
                 LEFT_CHOICE,
                 RIGHT_CHOICE,
                 ANALYSIS_WINDOW_MS,
@@ -241,7 +243,7 @@ def run_consistency(
 
     stabilities, stab_by_ch = compute_stabilities(channels, si_matrix, diff_tensor)
 
-    base_title = f"{CONDITION_FOLDER} | {ALIGNMENT_EVENT} | {filter_summary(TRIAL_FILTERS)} | {processing_label(GAUSSIAN_SMOOTH_MS, zscore_mua)}"
+    base_title = f"{CONDITION_FOLDER} | {ALIGNMENT_EVENT} | {filter_summary(trial_filters)} | {processing_label(GAUSSIAN_SMOOTH_MS, zscore_mua)}"
 
     plot_si_heatmap(
         si_matrix, session_ids, channels,

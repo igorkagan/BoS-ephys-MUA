@@ -24,7 +24,7 @@ from assess_cross_session_consistency import (
 from bos_mua.tensors import build_tensors
 from bos_mua.features import extract_session_summaries
 from bos_mua.io import discover_sessions
-from bos_mua.preprocess import processing_label, resolve_figures_dir
+from bos_mua.preprocess import processing_label, resolve_consistency_dir, trial_filters_for_condition
 from bos_mua.viz_consistency import plot_si_heatmap, plot_signed_sig_heatmap
 
 
@@ -32,16 +32,17 @@ def replot_heatmaps(zscore_mua: bool) -> None:
     condition_dir = Path(DATA_ROOT) / CONDITION_FOLDER
     session_ids = SESSION_IDS or discover_sessions(condition_dir)
     label = "z-scored" if zscore_mua else "original"
-    output_dir = resolve_figures_dir(OUTPUT_DIR, zscore_mua) / CONDITION_FOLDER
+    output_dir = resolve_consistency_dir(OUTPUT_DIR, zscore_mua, CONDITION_FOLDER)
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    trial_filters = TRIAL_FILTERS or trial_filters_for_condition(CONDITION_FOLDER)
     print(f"\n=== {label} | Extracting {len(session_ids)} sessions ===")
     all_summaries = []
     for sid in session_ids:
         summaries = extract_session_summaries(
             condition_dir / sid, sid,
             ALIGNMENT_EVENT, PRE_POST_TAG,
-            TRIAL_FILTERS, LEFT_CHOICE, RIGHT_CHOICE,
+            trial_filters, LEFT_CHOICE, RIGHT_CHOICE,
             ANALYSIS_WINDOW_MS, GAUSSIAN_SMOOTH_MS,
             min_trials=MIN_TRIALS_PER_GROUP,
             zscore_mua=zscore_mua,
@@ -51,7 +52,7 @@ def replot_heatmaps(zscore_mua: bool) -> None:
 
     channels, si_matrix, p_matrix, _, _ = build_tensors(all_summaries, session_ids)
     base_title = (
-        f"{CONDITION_FOLDER} | {ALIGNMENT_EVENT} | {filter_summary(TRIAL_FILTERS)}"
+        f"{CONDITION_FOLDER} | {ALIGNMENT_EVENT} | {filter_summary(trial_filters)}"
         f" | {processing_label(GAUSSIAN_SMOOTH_MS, zscore_mua)}"
     )
 

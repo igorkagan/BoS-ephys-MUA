@@ -29,16 +29,20 @@ from assess_cross_session_consistency import (
 )
 from bos_mua.features import extract_session_summaries
 from bos_mua.io import discover_sessions, filter_summary, window_indices
-from bos_mua.preprocess import processing_label, resolve_figures_dir
+from bos_mua.preprocess import (
+    MONKEY_CONDITIONS,
+    processing_label,
+    resolve_consistency_dir,
+    trial_filters_for_condition,
+)
 from bos_mua.tensors import build_tensors
-
-MONKEY_CONDITIONS = ["Elmo_BLOCKED", "Curius_BLOCKED"]
 
 
 def run_channel_rank_plots(condition_folder: str, zscore_mua: bool) -> None:
     condition_dir = Path(DATA_ROOT) / condition_folder
     session_ids = SESSION_IDS or discover_sessions(condition_dir)
-    output_dir = resolve_figures_dir(OUTPUT_DIR, zscore_mua) / condition_folder
+    trial_filters = TRIAL_FILTERS or trial_filters_for_condition(condition_folder)
+    output_dir = resolve_consistency_dir(OUTPUT_DIR, zscore_mua, condition_folder)
     output_dir.mkdir(parents=True, exist_ok=True)
     label = "z-scored" if zscore_mua else "original"
 
@@ -49,7 +53,7 @@ def run_channel_rank_plots(condition_folder: str, zscore_mua: bool) -> None:
             summaries = extract_session_summaries(
                 condition_dir / sid, sid,
                 ALIGNMENT_EVENT, PRE_POST_TAG,
-                TRIAL_FILTERS, LEFT_CHOICE, RIGHT_CHOICE,
+                trial_filters, LEFT_CHOICE, RIGHT_CHOICE,
                 ANALYSIS_WINDOW_MS, GAUSSIAN_SMOOTH_MS,
                 min_trials=MIN_TRIALS_PER_GROUP,
                 zscore_mua=zscore_mua,
@@ -68,7 +72,7 @@ def run_channel_rank_plots(condition_folder: str, zscore_mua: bool) -> None:
     lookup = summaries_lookup(all_summaries)
     stabilities, _ = compute_stabilities(channels, si_matrix, diff_tensor)
     base_title = (
-        f"{condition_folder} | {ALIGNMENT_EVENT} | {filter_summary(TRIAL_FILTERS)}"
+        f"{condition_folder} | {ALIGNMENT_EVENT} | {filter_summary(trial_filters)}"
         f" | {processing_label(GAUSSIAN_SMOOTH_MS, zscore_mua)}"
     )
     plot_best_worst_channels(

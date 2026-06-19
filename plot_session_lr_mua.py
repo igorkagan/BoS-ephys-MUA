@@ -32,24 +32,25 @@ from bos_mua.io import (
     trial_window_means,
     window_indices,
 )
-from bos_mua.preprocess import processing_label, resolve_figures_dir, zscore_channel_trials
+from bos_mua.preprocess import (
+    MONKEY_CONDITIONS,
+    processing_label,
+    resolve_condition_output_dir,
+    trial_filters_for_condition,
+    zscore_channel_trials,
+)
 
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 
 DATA_ROOT = r"S:\taskcontroller\SCP_DATA\SCP-CTRL-01\MUA_curated_sessions"
-CONDITION_FOLDER = "Curius_BLOCKED"
-SESSION_ID = None  # None = all sessions in CONDITION_FOLDER; or set a single session ID
+CONDITION_FOLDER = None  # None = all MONKEY_CONDITIONS; or set one e.g. "Curius_BLOCKED"
+SESSION_ID = None  # None = all sessions in condition; or set a single session ID
 ALIGNMENT_EVENT = "A_InitialFixationReleaseTime_ms"
 PRE_POST_TAG = "pre1000ms.post1000ms"
 
-TRIAL_FILTERS = {
-    "TrialSubType_list": ["Dyadic"],
-    "conf_predictability_list": ["Blocked"],
-    "go_seq_500_list": ["AgoB"],
-    "A_Reward_list": ["RA1", "RA2", "RA3", "RA4"],
-}
+TRIAL_FILTERS = None  # None = per-condition defaults via trial_filters_for_condition
 LEFT_CHOICE = ["Al"]
 RIGHT_CHOICE = ["Ar"]
 INVALID_LABELS = {"NONE", "None", "none", ""}
@@ -223,8 +224,14 @@ def make_array_figure(
     return fig
 
 
-def plot_session(session_id: str, output_dir: Path, zscore_mua: bool) -> None:
-    session_dir = Path(DATA_ROOT) / CONDITION_FOLDER / session_id
+def plot_session(
+    session_id: str,
+    condition_folder: str,
+    trial_filters: dict,
+    output_dir: Path,
+    zscore_mua: bool,
+) -> None:
+    session_dir = Path(DATA_ROOT) / condition_folder / session_id
     event_dir = session_dir / ALIGNMENT_EVENT
 
     if not session_dir.exists():
@@ -233,7 +240,7 @@ def plot_session(session_id: str, output_dir: Path, zscore_mua: bool) -> None:
         raise FileNotFoundError(f"Event directory not found: {event_dir}")
 
     labels = load_trial_labels(session_dir, session_id)
-    base_mask = build_base_mask(labels, TRIAL_FILTERS, invalid_labels=frozenset(INVALID_LABELS))
+    base_mask = build_base_mask(labels, trial_filters, invalid_labels=frozenset(INVALID_LABELS))
     left_mask = choice_mask(labels, base_mask, LEFT_CHOICE)
     right_mask = choice_mask(labels, base_mask, RIGHT_CHOICE)
 
@@ -248,10 +255,10 @@ def plot_session(session_id: str, output_dir: Path, zscore_mua: bool) -> None:
 
     channel_paths = channel_files_by_number(event_dir)
 
-    summary = filter_summary(TRIAL_FILTERS)
+    summary = filter_summary(trial_filters)
     proc_label = processing_label(GAUSSIAN_SMOOTH_MS, zscore_mua)
     suptitle_base = (
-        f"{session_id} | {CONDITION_FOLDER} | {ALIGNMENT_EVENT}\n"
+        f"{session_id} | {condition_folder} | {ALIGNMENT_EVENT}\n"
         f"{summary} | {proc_label} | "
         f"window {ANALYSIS_WINDOW_MS[0]}:{ANALYSIS_WINDOW_MS[1]} ms | "
         f"trials L={n_left}, R={n_right}"
@@ -270,23 +277,35 @@ def plot_session(session_id: str, output_dir: Path, zscore_mua: bool) -> None:
         print(f"  Saved {out_path.name}")
 
 
-def main() -> None:
-    condition_dir = Path(DATA_ROOT) / CONDITION_FOLDER
+def run_condition(condition_folder: str, zscore_mua: bool) -> None:
+    condition_dir = Path(DATA_ROOT) / condition_folder
+    if not condition_dir.exists():
+        warnings.warn(f"Condition folder not found: {condition_dir}")
+        return
+
     session_ids = [SESSION_ID] if SESSION_ID else discover_sessions(condition_dir)
     if not session_ids:
-        raise FileNotFoundError(f"No sessions in {condition_dir}")
+        warnings.warn(f"No sessions in {condition_dir}")
+        return
 
+    trial_filters = TRIAL_FILTERS or trial_filters_for_condition(condition_folder)
+    output_dir = resolve_condition_output_dir(OUTPUT_DIR, zscore_mua, condition_folder)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    label = "z-scored" if zscore_mua else "original"
+    print(f"\n=== {condition_folder} | {label} | {len(session_ids)} session(s) -> {output_dir} ===")
+    for session_id in session_ids:
+        try:
+            plot_session(session_id, condition_folder, trial_filters, output_dir, zscore_mua)
+        except Exception as exc:
+            warnings.warn(f"Skipping {session_id} ({label}): {exc}")
+
+
+def main() -> None:
+    conditions = [CONDITION_FOLDER] if CONDITION_FOLDER else MONKEY_CONDITIONS
     modes = (False, True) if RUN_BOTH_PROCESSING else (ZSCORE_MUA,)
     for zscore_mua in modes:
-        output_dir = resolve_figures_dir(OUTPUT_DIR, zscore_mua)
-        output_dir.mkdir(parents=True, exist_ok=True)
-        label = "z-scored" if zscore_mua else "original"
-        print(f"\n=== {label} | Plotting {len(session_ids)} session(s) -> {output_dir} ===")
-        for session_id in session_ids:
-            try:
-                plot_session(session_id, output_dir, zscore_mua)
-            except Exception as exc:
-                warnings.warn(f"Skipping {session_id} ({label}): {exc}")
+        for condition_folder in conditions:
+            run_condition(condition_folder, zscore_mua)
 
 
 if __name__ == "__main__":
