@@ -20,7 +20,12 @@ from bos_mua.io import (
     trial_window_means,
     window_indices,
 )
-from bos_mua.preprocess import zscore_channel_trials
+from bos_mua.preprocess import (
+    recording_monkey,
+    zscore_channel_trials,
+    zscore_reference_mask,
+)
+from bos_mua.evoked import TASK_EVOKED_ALPHA, task_evoked_anova_pvalues, session_task_evoked
 
 
 @dataclass
@@ -38,6 +43,9 @@ class ChannelSummary:
     si: float
     mwu_p: float | None
     pref_side: str
+    evoked_p_left: float | None
+    evoked_p_right: float | None
+    task_evoked: bool
 
 
 def selectivity_index(left_mean: float, right_mean: float) -> float:
@@ -83,13 +91,14 @@ def extract_channel_summary(
     gaussian_smooth_ms: float,
     min_trials: int = 3,
     zscore_mua: bool = False,
+    zscore_reference: np.ndarray | None = None,
 ) -> ChannelSummary | None:
     ch_num = channel_number(ch_path)
     array_name, index_in_array = channel_to_array(ch_num)
 
     mua = loadmat(ch_path)["cur_output_data"]
     if zscore_mua:
-        mua = zscore_channel_trials(mua)
+        mua = zscore_channel_trials(mua, reference_mask=zscore_reference)
     row_ok = ~np.all(np.isnan(mua), axis=1)
 
     left_trials = gaussian_smooth_trials(mua[left_mask & row_ok], t_ms, gaussian_smooth_ms)
@@ -110,6 +119,8 @@ def extract_channel_summary(
     right_wm = float(np.nanmean(right_rates)) if right_rates.size else np.nan
     si = selectivity_index(left_wm, right_wm)
     mwu_p, pref_side = run_mann_whitney(left_rates, right_rates, min_trials=min_trials)
+    evoked_p_left, evoked_p_right = task_evoked_anova_pvalues(left_trials, right_trials, t_ms, min_trials=min_trials)
+    task_evoked = session_task_evoked(evoked_p_left, evoked_p_right, alpha=TASK_EVOKED_ALPHA)
 
     return ChannelSummary(
         session_id=session_id,
@@ -125,6 +136,9 @@ def extract_channel_summary(
         si=si,
         mwu_p=mwu_p,
         pref_side=pref_side,
+        evoked_p_left=evoked_p_left,
+        evoked_p_right=evoked_p_right,
+        task_evoked=task_evoked,
     )
 
 
@@ -134,18 +148,30 @@ def extract_session_summaries(
     alignment_event: str,
     pre_post_tag: str,
     trial_filters: dict[str, list[str]],
+    choice_field: str,
     left_choice: list[str],
     right_choice: list[str],
     analysis_window_ms: tuple[float, float],
     gaussian_smooth_ms: float,
     min_trials: int = 3,
     zscore_mua: bool = False,
+    condition_label: str = "",
 ) -> list[ChannelSummary]:
     event_dir = session_dir / alignment_event
     labels = load_trial_labels(session_dir, session_id)
     base_mask = build_base_mask(labels, trial_filters)
-    left_mask = choice_mask(labels, base_mask, left_choice)
-    right_mask = choice_mask(labels, base_mask, right_choice)
+    left_mask = choice_mask(labels, base_mask, left_choice, field=choice_field)
+    right_mask = choice_mask(labels, base_mask, right_choice, field=choice_field)
+    zscore_ref = None
+    if zscore_mua:
+        from bos_mua.run_context import get_active_context
+
+        ctx = get_active_context()
+        if ctx is not None:
+            monkey = ctx.resolved_recording_monkey(session_id)
+        else:
+            monkey = recording_monkey(session_id=session_id, condition_label=condition_label)
+        zscore_ref = zscore_reference_mask(labels, monkey)
 
     t_ms = load_time_vector(event_dir, session_id, alignment_event, pre_post_tag)
     win_idx = window_indices(t_ms, analysis_window_ms)
@@ -164,6 +190,7 @@ def extract_session_summaries(
             gaussian_smooth_ms,
             min_trials=min_trials,
             zscore_mua=zscore_mua,
+            zscore_reference=zscore_ref,
         )
         if summary is not None:
             summaries.append(summary)

@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import numpy as np
 from scipy.stats import pearsonr
+
+if TYPE_CHECKING:
+    from bos_mua.features import ChannelSummary
 
 
 @dataclass
@@ -19,7 +23,30 @@ class ChannelStability:
     si_std: float
     si_median_abs: float
     si_pairwise_median_delta: float
+    task_evoked: bool
+    n_sessions_task_evoked: int
     stable: bool
+
+
+def channel_task_evoked_all_sessions(
+    lookup: dict[str, dict[int, ChannelSummary]],
+    session_ids: list[str],
+    channel: int,
+) -> tuple[bool, int, int]:
+    """True when every session with channel data passes task-evoked."""
+
+    n_with_data = 0
+    n_evoked = 0
+    for sid in session_ids:
+        summary = lookup.get(sid, {}).get(channel)
+        if summary is None:
+            continue
+        n_with_data += 1
+        if summary.task_evoked:
+            n_evoked += 1
+    if n_with_data == 0:
+        return False, 0, 0
+    return n_evoked == n_with_data, n_evoked, n_with_data
 
 
 def si_pairwise_median_delta(si_values: np.ndarray) -> float:
@@ -110,6 +137,9 @@ def assess_channel_stability(
     r_thresh: float,
     icc_thresh: float,
     sign_thresh: float,
+    *,
+    task_evoked: bool,
+    n_sessions_task_evoked: int,
 ) -> ChannelStability:
     rs = pairwise_correlations(diff_traces)
     median_r = float(np.nanmedian(rs)) if rs.size else np.nan
@@ -126,6 +156,7 @@ def assess_channel_stability(
         and icc >= icc_thresh
         and np.isfinite(concordance)
         and concordance >= sign_thresh
+        and task_evoked
     )
 
     return ChannelStability(
@@ -140,6 +171,8 @@ def assess_channel_stability(
         si_std=float(np.nanstd(si_finite)) if si_finite.size else np.nan,
         si_median_abs=si_median_abs,
         si_pairwise_median_delta=si_pw_delta,
+        task_evoked=task_evoked,
+        n_sessions_task_evoked=n_sessions_task_evoked,
         stable=stable,
     )
 
@@ -170,17 +203,19 @@ def rank_best_worst_channels(
     stabilities: list[ChannelStability],
     n: int = 10,
 ) -> tuple[list[ChannelStability], list[ChannelStability]]:
-    """Rank by median pairwise r of delta waveforms (higher = more stable tuning)."""
+    """Rank stable channels by median pairwise r (best); worst unchanged."""
     if not stabilities:
         return [], []
 
     def sort_key(s: ChannelStability) -> float:
         return s.median_pairwise_r if np.isfinite(s.median_pairwise_r) else -np.inf
 
-    ranked = sorted(stabilities, key=sort_key, reverse=True)
-    n = min(n, len(ranked))
-    best = ranked[:n]
-    worst = ranked[-n:][::-1]  # lowest r first
+    stable_ranked = sorted([s for s in stabilities if s.stable], key=sort_key, reverse=True)
+    all_ranked = sorted(stabilities, key=sort_key, reverse=True)
+    n = min(n, len(stable_ranked)) if stable_ranked else 0
+    best = stable_ranked[:n]
+    n_worst = min(n, len(all_ranked))
+    worst = all_ranked[-n_worst:][::-1] if n_worst else []
     return best, worst
 
 
@@ -197,6 +232,7 @@ def passes_tuned_stable_gate(
         and stab.si_std <= si_std_max
         and np.isfinite(stab.si_median_abs)
         and stab.si_median_abs >= si_abs_min
+        and stab.task_evoked
     )
 
 

@@ -71,8 +71,16 @@ def build_base_mask(
     return mask
 
 
-def choice_mask(labels: dict[str, np.ndarray], base_mask: np.ndarray, choices: list[str]) -> np.ndarray:
-    return base_mask & np.isin(labels["A_LR_pos_list"], choices)
+def choice_mask(
+    labels: dict[str, np.ndarray],
+    base_mask: np.ndarray,
+    choices: list[str],
+    *,
+    field: str = "A_LR_pos_list",
+) -> np.ndarray:
+    if field not in labels:
+        raise KeyError(f"Missing choice label field: {field}")
+    return base_mask & np.isin(labels[field], choices)
 
 
 def load_time_vector(event_dir: Path, session_id: str, event: str, pre_post_tag: str) -> np.ndarray:

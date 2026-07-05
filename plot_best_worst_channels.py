@@ -7,6 +7,7 @@ import warnings
 from pathlib import Path
 
 from assess_cross_session_consistency import (
+    CHOICE_FIELD,
     ALIGNMENT_EVENT,
     ANALYSIS_WINDOW_MS,
     BEST_WORST_N,
@@ -28,20 +29,28 @@ from assess_cross_session_consistency import (
     summaries_lookup,
 )
 from bos_mua.features import extract_session_summaries
-from bos_mua.io import discover_sessions, filter_summary, window_indices
+from bos_mua.io import filter_summary, window_indices
 from bos_mua.preprocess import (
     MONKEY_CONDITIONS,
     processing_label,
     resolve_consistency_dir,
     trial_filters_for_condition,
 )
+from bos_mua.run_context import get_active_context, resolve_session_dir, session_ids_for_run
 from bos_mua.tensors import build_tensors
 
 
 def run_channel_rank_plots(condition_folder: str, zscore_mua: bool) -> None:
-    condition_dir = Path(DATA_ROOT) / condition_folder
-    session_ids = SESSION_IDS or discover_sessions(condition_dir)
-    trial_filters = TRIAL_FILTERS or trial_filters_for_condition(condition_folder)
+    session_ids = session_ids_for_run(
+        DATA_ROOT, condition_folder, explicit_ids=SESSION_IDS,
+    )
+    ctx = get_active_context()
+    if ctx is not None:
+        trial_filters = ctx.trial_filters
+    elif TRIAL_FILTERS:
+        trial_filters = TRIAL_FILTERS
+    else:
+        trial_filters = trial_filters_for_condition(condition_folder)
     output_dir = resolve_consistency_dir(OUTPUT_DIR, zscore_mua, condition_folder)
     output_dir.mkdir(parents=True, exist_ok=True)
     label = "z-scored" if zscore_mua else "original"
@@ -49,14 +58,18 @@ def run_channel_rank_plots(condition_folder: str, zscore_mua: bool) -> None:
     print(f"\n=== {condition_folder} | {label} | channel rank plots ===")
     all_summaries = []
     for sid in session_ids:
+        session_dir = resolve_session_dir(
+            sid, data_root=DATA_ROOT, condition_folder=condition_folder,
+        )
         try:
             summaries = extract_session_summaries(
-                condition_dir / sid, sid,
+                session_dir, sid,
                 ALIGNMENT_EVENT, PRE_POST_TAG,
-                trial_filters, LEFT_CHOICE, RIGHT_CHOICE,
+                trial_filters, CHOICE_FIELD, LEFT_CHOICE, RIGHT_CHOICE,
                 ANALYSIS_WINDOW_MS, GAUSSIAN_SMOOTH_MS,
                 min_trials=MIN_TRIALS_PER_GROUP,
                 zscore_mua=zscore_mua,
+                condition_label=condition_folder,
             )
             all_summaries.extend(summaries)
             print(f"  {sid}: {len(summaries)} channels with data")
@@ -70,7 +83,7 @@ def run_channel_rank_plots(condition_folder: str, zscore_mua: bool) -> None:
     channels, si_matrix, _, diff_tensor, t_ms = build_tensors(all_summaries, session_ids)
     win_idx = window_indices(t_ms, ANALYSIS_WINDOW_MS)
     lookup = summaries_lookup(all_summaries)
-    stabilities, _ = compute_stabilities(channels, si_matrix, diff_tensor)
+    stabilities, _ = compute_stabilities(channels, si_matrix, diff_tensor, lookup, session_ids)
     base_title = (
         f"{condition_folder} | {ALIGNMENT_EVENT} | {filter_summary(trial_filters)}"
         f" | {processing_label(GAUSSIAN_SMOOTH_MS, zscore_mua)}"

@@ -12,6 +12,7 @@ import warnings
 from collections import defaultdict
 from pathlib import Path
 
+from bos_mua.viz_lr import configure_array_time_axis
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.io import loadmat
@@ -37,10 +38,13 @@ from bos_mua.io import (
 from bos_mua.preprocess import (
     MONKEY_CONDITIONS,
     processing_label,
+    recording_monkey,
     resolve_condition_output_dir,
     trial_filters_for_condition,
     zscore_channel_trials,
+    zscore_reference_mask,
 )
+from bos_mua.run_context import resolve_session_dir, session_ids_for_run
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -52,6 +56,7 @@ ALIGNMENT_EVENT = "A_InitialFixationReleaseTime_ms"
 PRE_POST_TAG = "pre1000ms.post1000ms"
 
 TRIAL_FILTERS = None  # None = per-condition defaults via trial_filters_for_condition
+CHOICE_FIELD = "A_LR_pos_list"
 LEFT_CHOICE = ["Al"]
 RIGHT_CHOICE = ["Ar"]
 INVALID_LABELS = frozenset({"NONE", "None", "none", ""})
@@ -217,9 +222,11 @@ def load_channel_lr_trials(
     left_mask: np.ndarray,
     right_mask: np.ndarray,
     t_ms: np.ndarray,
+    *,
+    zscore_reference: np.ndarray | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     mua = loadmat(ch_path)["cur_output_data"]
-    mua = zscore_channel_trials(mua)
+    mua = zscore_channel_trials(mua, reference_mask=zscore_reference)
     row_ok = ~np.all(np.isnan(mua), axis=1)
 
     left_trials = gaussian_smooth_trials(mua[left_mask & row_ok], t_ms, GAUSSIAN_SMOOTH_MS)
@@ -233,7 +240,6 @@ def collect_pooled_data(
     trial_filters: dict,
 ) -> tuple[np.ndarray, np.ndarray, dict[int, list[np.ndarray]], dict[int, list[np.ndarray]], dict[int, list[float]], dict[int, list[float]]]:
     """Return time vector, win_idx, pooled trials and session means per channel."""
-    condition_dir = Path(DATA_ROOT) / condition
     t_ms: np.ndarray | None = None
     win_idx: np.ndarray | None = None
 
@@ -243,16 +249,24 @@ def collect_pooled_data(
     sess_right_by_ch: dict[int, list[float]] = defaultdict(list)
 
     for session_id in session_ids:
-        session_dir = condition_dir / session_id
+        session_dir = resolve_session_dir(
+            session_id, data_root=DATA_ROOT, condition_folder=condition,
+        )
         event_dir = session_dir / ALIGNMENT_EVENT
         if not event_dir.exists():
             warnings.warn(f"Skipping {session_id}: missing event dir {event_dir}")
             continue
 
-        labels = load_trial_labels(session_dir, session_id)
-        base_mask = build_base_mask(labels, trial_filters, invalid_labels=INVALID_LABELS)
-        left_mask = choice_mask(labels, base_mask, LEFT_CHOICE)
-        right_mask = choice_mask(labels, base_mask, RIGHT_CHOICE)
+        try:
+            labels = load_trial_labels(session_dir, session_id)
+            base_mask = build_base_mask(labels, trial_filters, invalid_labels=INVALID_LABELS)
+            left_mask = choice_mask(labels, base_mask, LEFT_CHOICE, field=CHOICE_FIELD)
+            right_mask = choice_mask(labels, base_mask, RIGHT_CHOICE, field=CHOICE_FIELD)
+            monkey = recording_monkey(session_id=session_id, condition_label=condition)
+            zscore_ref = zscore_reference_mask(labels, monkey)
+        except Exception as exc:
+            warnings.warn(f"Skipping {session_id}: {exc}")
+            continue
 
         session_t_ms = load_time_vector(event_dir, session_id, ALIGNMENT_EVENT, PRE_POST_TAG)
         session_win_idx = window_indices(session_t_ms, ANALYSIS_WINDOW_MS)
@@ -273,6 +287,7 @@ def collect_pooled_data(
             try:
                 left_trials, right_trials = load_channel_lr_trials(
                     ch_path, left_mask, right_mask, session_t_ms,
+                    zscore_reference=zscore_ref,
                 )
             except Exception as exc:
                 warnings.warn(f"Skipping ch{ch_num:03d} in {session_id}: {exc}")
@@ -345,19 +360,23 @@ def make_array_figure(
 
         if panel_idx % n_cols == 0:
             ax.set_ylabel("MUA (z)", fontsize=7)
-        if panel_idx >= (n_rows - 1) * n_cols:
-            ax.set_xlabel("Time (ms)", fontsize=7)
+
+    configure_array_time_axis(axes, t_ms)
 
     fig.suptitle(suptitle, fontsize=10, y=0.995)
     fig.tight_layout(rect=[0, 0, 1, 0.98])
     return fig
 
 
-def plot_condition_combined(condition: str, output_dir: Path) -> None:
-    condition_dir = Path(DATA_ROOT) / condition
-    session_ids = discover_sessions(condition_dir)
+def plot_condition_combined(
+    condition: str,
+    output_dir: Path,
+    session_ids: list[str] | None = None,
+) -> None:
+    if session_ids is None:
+        session_ids = session_ids_for_run(DATA_ROOT, condition)
     if not session_ids:
-        raise FileNotFoundError(f"No sessions in {condition_dir}")
+        raise FileNotFoundError(f"No sessions for {condition}")
 
     trial_filters = TRIAL_FILTERS or trial_filters_for_condition(condition)
     print(f"\n=== {condition} | {len(session_ids)} session(s) -> {output_dir} ===")

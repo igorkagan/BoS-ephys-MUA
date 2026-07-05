@@ -4,6 +4,7 @@ import csv
 from dataclasses import asdict
 from pathlib import Path
 
+from bos_mua.viz_lr import annotate_task_evoked_text, configure_array_time_axis, task_evoked_annotation_text
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import Normalize
@@ -288,7 +289,9 @@ def plot_delta_consensus_array(
             ann = (
                 f"r={stab.median_pairwise_r:.2f}\n"
                 f"{stab.n_same_sign}/{stab.n_sessions} sign\n"
-                f"ICC={stab.icc:.2f}\n{flag}"
+                f"ICC={stab.icc:.2f}\n"
+                f"task={'yes' if stab.task_evoked else 'no'}\n"
+                f"{flag}"
             )
             ax.text(
                 0.02, 0.98, ann, transform=ax.transAxes, va="top", ha="left", fontsize=6,
@@ -307,8 +310,8 @@ def plot_delta_consensus_array(
 
         if panel_idx % n_cols == 0:
             ax.set_ylabel("Δ MUA", fontsize=7)
-        if panel_idx >= (n_rows - 1) * n_cols:
-            ax.set_xlabel("Time (ms)", fontsize=7)
+
+    configure_array_time_axis(axes, t_ms)
 
     fig.suptitle(title, fontsize=10, y=0.995)
     fig.tight_layout(rect=[0, 0, 1, 0.98])
@@ -321,8 +324,15 @@ def stability_deep_dive_title(base_title: str, label: str, stab: ChannelStabilit
     return (
         f"{base_title} | {label} ch{stab.channel:03d} ({stab.array_name})\n"
         f"median r={stab.median_pairwise_r:.2f}  ICC={stab.icc:.2f}  "
-        f"sign={stab.n_same_sign}/{stab.n_sessions}  {flag}"
+        f"sign={stab.n_same_sign}/{stab.n_sessions}  task={'yes' if stab.task_evoked else 'no'}  {flag}"
     )
+
+
+def _deep_dive_subplot_grid(n_sessions: int) -> tuple[int, int, tuple[float, float]]:
+    """Return (nrows, ncols, figsize) for one panel per session (5 columns)."""
+    ncols = 5
+    nrows = max(1, (n_sessions + ncols - 1) // ncols)
+    return nrows, ncols, (14.0, 2.5 * nrows)
 
 
 def plot_deep_dive_channel(
@@ -333,8 +343,9 @@ def plot_deep_dive_channel(
     title: str,
     out_path: Path,
 ) -> None:
-    fig, axes = plt.subplots(2, 5, figsize=(14, 5), sharex=True, sharey=True)
-    axes_flat = axes.ravel()
+    nrows, ncols, figsize = _deep_dive_subplot_grid(len(session_ids))
+    fig, axes = plt.subplots(nrows, ncols, figsize=figsize, sharex=True, sharey=True)
+    axes_flat = np.atleast_1d(axes).ravel()
 
     y_vals = []
     for sid in session_ids:
@@ -370,6 +381,14 @@ def plot_deep_dive_channel(
         if win_idx.size:
             ax.axvspan(s.t_ms[win_idx[0]], s.t_ms[win_idx[-1]], color="0.9", alpha=0.3)
         ax.axvline(0, color="0.5", linewidth=0.5, linestyle="--")
+        annotate_task_evoked_text(
+            ax,
+            task_evoked_annotation_text(
+                task_evoked=s.task_evoked,
+                p_left=s.evoked_p_left,
+                p_right=s.evoked_p_right,
+            ),
+        )
         ax.set_title(f"{sid.split('.')[0]}\nL={s.n_left} R={s.n_right}", fontsize=6)
         ax.tick_params(labelsize=5)
         if ylim:
@@ -377,6 +396,11 @@ def plot_deep_dive_channel(
 
     for ax in axes_flat[len(session_ids):]:
         ax.axis("off")
+
+    if session_ids:
+        first = summaries_by_session.get(session_ids[0], {}).get(channel)
+        if first is not None:
+            configure_array_time_axis(axes, first.t_ms)
 
     fig.suptitle(title, fontsize=10)
     fig.tight_layout()
@@ -389,6 +413,7 @@ def tuned_stable_deep_dive_title(base_title: str, stab: ChannelStability) -> str
         f"{base_title} | best10_tuned_stable ch{stab.channel:03d} ({stab.array_name})\n"
         f"median |SI|={stab.si_median_abs:.2f}  si_std={stab.si_std:.2f}  "
         f"sign={stab.n_same_sign}/{stab.n_sessions}  "
+        f"task={'yes' if stab.task_evoked else 'no'}  "
         f"median r={stab.median_pairwise_r:.2f}"
     )
 

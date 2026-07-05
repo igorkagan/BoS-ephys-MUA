@@ -4,6 +4,7 @@
 from pathlib import Path
 
 from assess_cross_session_consistency import (
+    CHOICE_FIELD,
     ALIGNMENT_EVENT,
     ALPHA,
     ANALYSIS_WINDOW_MS,
@@ -42,10 +43,11 @@ def replot_heatmaps(zscore_mua: bool) -> None:
         summaries = extract_session_summaries(
             condition_dir / sid, sid,
             ALIGNMENT_EVENT, PRE_POST_TAG,
-            trial_filters, LEFT_CHOICE, RIGHT_CHOICE,
+            trial_filters, CHOICE_FIELD, LEFT_CHOICE, RIGHT_CHOICE,
             ANALYSIS_WINDOW_MS, GAUSSIAN_SMOOTH_MS,
             min_trials=MIN_TRIALS_PER_GROUP,
             zscore_mua=zscore_mua,
+            condition_label=CONDITION_FOLDER,
         )
         all_summaries.extend(summaries)
         print(f"  {sid}: {len(summaries)} channels")

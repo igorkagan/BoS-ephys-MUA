@@ -18,14 +18,15 @@ from bos_mua.features import ChannelSummary, extract_session_summaries
 from bos_mua.io import (
     ARRAY_NAMES,
     CHANNELS_PER_ARRAY,
-    discover_sessions,
     filter_summary,
     session_sort_key,
     window_indices,
 )
 from bos_mua.preprocess import processing_label, resolve_consistency_dir, trial_filters_for_condition
+from bos_mua.run_context import get_active_context, resolve_session_dir, session_ids_for_run
 from bos_mua.stability import (
     assess_channel_stability,
+    channel_task_evoked_all_sessions,
     rank_best_worst_channels,
     rank_tuned_stable_channels,
     session_similarity_matrix,
@@ -60,6 +61,7 @@ ALIGNMENT_EVENT = "A_InitialFixationReleaseTime_ms"
 PRE_POST_TAG = "pre1000ms.post1000ms"
 
 TRIAL_FILTERS: dict[str, list[str]] | None = None  # None = auto from CONDITION_FOLDER
+CHOICE_FIELD = "A_LR_pos_list"
 LEFT_CHOICE = ["Al"]
 RIGHT_CHOICE = ["Ar"]
 
@@ -109,6 +111,8 @@ def compute_stabilities(
     channels: list[int],
     si_matrix: np.ndarray,
     diff_tensor: np.ndarray,
+    lookup: dict[str, dict[int, ChannelSummary]],
+    session_ids: list[str],
 ) -> tuple[list, dict[int, object]]:
     stabilities = []
     stab_by_ch: dict[int, object] = {}
@@ -121,13 +125,33 @@ def compute_stabilities(
         traces_present = traces[valid_sess]
         si_vals = si_matrix[valid_sess, ch_idx]
         array_name = ARRAY_NAMES[(ch - 1) // CHANNELS_PER_ARRAY]
+        task_evoked, n_evoked, _ = channel_task_evoked_all_sessions(lookup, session_ids, ch)
         stab = assess_channel_stability(
-            ch, array_name, traces_present, si_vals,
-            R_STABLE_THRESH, ICC_STABLE_THRESH, SIGN_CONCORDANCE_THRESH,
+            ch,
+            array_name,
+            traces_present,
+            si_vals,
+            R_STABLE_THRESH,
+            ICC_STABLE_THRESH,
+            SIGN_CONCORDANCE_THRESH,
+            task_evoked=task_evoked,
+            n_sessions_task_evoked=n_evoked,
         )
         stabilities.append(stab)
         stab_by_ch[ch] = stab
     return stabilities, stab_by_ch
+
+
+def purge_stale_pdfs(output_dir: Path, patterns: list[str]) -> int:
+    """Remove leftover channel PDFs from prior runs."""
+    removed = 0
+    for pattern in patterns:
+        for path in output_dir.glob(pattern):
+            path.unlink(missing_ok=True)
+            removed += 1
+    if removed:
+        print(f"Removed {removed} stale PDF(s) from {output_dir}")
+    return removed
 
 
 def plot_best_worst_channels(
@@ -155,7 +179,7 @@ def plot_best_worst_channels(
     if best or worst:
         print(
             f"Saved {len(best)} best10 + {len(worst)} worst10 deep-dive PDFs "
-            f"(ranked by median pairwise r)"
+            f"(best10: stable + task-evoked; ranked by median pairwise r)"
         )
 
 
@@ -180,7 +204,7 @@ def plot_tuned_stable_channels(
     if len(tuned) < n:
         warnings.warn(
             f"Only {len(tuned)} channels pass tuned-stable gate "
-            f"(sign>={sign_thresh}, si_std<={si_std_max}, median|SI|>={si_abs_min}); "
+            f"(sign>={sign_thresh}, si_std<={si_std_max}, median|SI|>={si_abs_min}, task-evoked); "
             f"requested {n}"
         )
     for stab in tuned:
@@ -192,13 +216,12 @@ def plot_tuned_stable_channels(
     if tuned:
         print(
             f"Saved {len(tuned)} best10_tuned_stable deep-dive PDFs "
-            f"(ranked by median |SI|, SI-stable gate)"
+            f"(ranked by median |SI|, SI-stable + task-evoked gate)"
         )
     return tuned
 
 
 def run_consistency(
-    condition_dir: Path,
     session_ids: list[str],
     ref_session: str,
     ref_idx: int,
@@ -212,7 +235,9 @@ def run_consistency(
     print(f"\n=== {label} | Processing {len(session_ids)} sessions -> {output_dir} ===")
     all_summaries: list[ChannelSummary] = []
     for sid in session_ids:
-        session_dir = condition_dir / sid
+        session_dir = resolve_session_dir(
+            sid, data_root=DATA_ROOT, condition_folder=CONDITION_FOLDER,
+        )
         try:
             summaries = extract_session_summaries(
                 session_dir,
@@ -220,12 +245,14 @@ def run_consistency(
                 ALIGNMENT_EVENT,
                 PRE_POST_TAG,
                 trial_filters,
+                CHOICE_FIELD,
                 LEFT_CHOICE,
                 RIGHT_CHOICE,
                 ANALYSIS_WINDOW_MS,
                 GAUSSIAN_SMOOTH_MS,
                 min_trials=MIN_TRIALS_PER_GROUP,
                 zscore_mua=zscore_mua,
+                condition_label=CONDITION_FOLDER,
             )
             all_summaries.extend(summaries)
             print(f"  {sid}: {len(summaries)} channels with data")
@@ -241,7 +268,7 @@ def run_consistency(
     win_idx = window_indices(t_ms, ANALYSIS_WINDOW_MS)
     lookup = summaries_lookup(all_summaries)
 
-    stabilities, stab_by_ch = compute_stabilities(channels, si_matrix, diff_tensor)
+    stabilities, stab_by_ch = compute_stabilities(channels, si_matrix, diff_tensor, lookup, session_ids)
 
     base_title = f"{CONDITION_FOLDER} | {ALIGNMENT_EVENT} | {filter_summary(trial_filters)} | {processing_label(GAUSSIAN_SMOOTH_MS, zscore_mua)}"
 
@@ -281,6 +308,15 @@ def run_consistency(
         )
 
     csv_path = output_dir / "channel_stability.csv"
+    purge_stale_pdfs(
+        output_dir,
+        [
+            "best10_tuned_stable_ch*.pdf",
+            "best10_ch*.pdf",
+            "worst10_ch*.pdf",
+            "deep_dive_ch*.pdf",
+        ],
+    )
     tuned_stable = plot_tuned_stable_channels(
         lookup, session_ids, stabilities, win_idx, base_title, output_dir, n=TUNED_STABLE_N,
     )
@@ -311,11 +347,15 @@ def run_consistency(
 
 
 def main() -> None:
-    condition_dir = Path(DATA_ROOT) / CONDITION_FOLDER
-    if not condition_dir.exists():
-        raise FileNotFoundError(f"Condition folder not found: {condition_dir}")
+    ctx = get_active_context()
+    if ctx is None or ctx.layout == "curated":
+        condition_dir = Path(DATA_ROOT) / CONDITION_FOLDER
+        if not condition_dir.exists():
+            raise FileNotFoundError(f"Condition folder not found: {condition_dir}")
 
-    session_ids = SESSION_IDS or discover_sessions(condition_dir)
+    session_ids = session_ids_for_run(
+        DATA_ROOT, CONDITION_FOLDER, explicit_ids=SESSION_IDS,
+    )
     if len(session_ids) < MIN_SESSIONS:
         raise ValueError(f"Need at least {MIN_SESSIONS} sessions, found {len(session_ids)}")
 
@@ -327,7 +367,7 @@ def main() -> None:
 
     modes = (False, True) if RUN_BOTH_PROCESSING else (ZSCORE_MUA,)
     for zscore_mua in modes:
-        run_consistency(condition_dir, session_ids, ref_session, ref_idx, zscore_mua)
+        run_consistency(session_ids, ref_session, ref_idx, zscore_mua)
 
 
 if __name__ == "__main__":

@@ -180,165 +180,199 @@ mua_sel = mua[blocked_dyadic_rewarded_monkeyfirst & row_ok]
 
 ## Analysis pipeline
 
-### How sessions enter a condition
+Two entry points share the same step engine ([`bos_mua/pipeline_runner.py`](bos_mua/pipeline_runner.py)) but differ in **how sessions are discovered** and **output layout**:
 
-**Sessions are not listed in `run_condition_across_sessions.py`.** They come from the filesystem.
+| | **Curated** | **Session-list (`session_lists.m`)** |
+|---|---|---|
+| **Runner** | [`run_condition_across_sessions.py`](run_condition_across_sessions.py) | [`run_session_list_across_sessions.py`](run_session_list_across_sessions.py) |
+| **Data root** | `MUA_curated_sessions/{Monkey}_{BLOCKED\|SHUFFLED}/` | `root_folder` in `session_lists.m` (flat `{session_id}/` folders) |
+| **Sessions** | All subdirs under condition folder | Explicit list in named cell array |
+| **Typical lists** | `Curius_BLOCKED`, `Elmo_SHUFFLED`, … | `DUAL_NHP`, `Elmo_BLOCKED_CONF`, … |
 
-Each condition folder under `DATA_ROOT` contains one subfolder per curated session:
+### Pipeline steps (default: all)
+
+| Step | Script | Curated output | DUAL_NHP / confederate flat-list output |
+|---|---|---|---|
+| `session_lr` | `plot_session_lr_mua` | `figures/{original\|zscored}/{CONDITION}/` | `{output}/{Monkey}_{AgoB\|BgoA}/figures/{original\|zscored}/` |
+| `consistency` | `assess_cross_session_consistency` | `figures/{original\|zscored}/consistency/{CONDITION}/` | `{output}/{Monkey}_{AgoB\|BgoA}/figures/…/consistency/` |
+| `combine` | `combine_sessions` (z-scored) | `figures/zscored/{CONDITION}/combined/` | `{output}/{Monkey}_{AgoB\|BgoA}/figures/zscored/combined/` |
+| `array_combined` | `plot_export_condition_arrays` | same `…/combined/` (array-mean ± SE) | `{output}/…/combined/*_arrays_combined_LR.pdf` |
+| `best_worst` | `plot_best_worst_channels` | deep dives under `consistency/{CONDITION}/` | deep dives under `{Monkey}_{AgoB\|BgoA}/figures/…/consistency/` |
+| `timing_compare` | `compare_monkey_timing_conditions` | skipped | DUAL_NHP + confederate: `{root}/{list}/{Monkey}_first_second_comparison/` |
+
+Steps always run in table order. Pass a subset with `--steps`, e.g. `--steps session_lr,consistency`.
+
+**Z-scoring:** per channel, μ/σ from **actor trials** only (Dyadic + that monkey's active solos; see [`bos_mua/preprocess.py`](bos_mua/preprocess.py) `zscore_reference_mask`), then apply analysis trial masks and smoothing. Transform is applied to all finite samples in the matrix.
+
+Plot colors: **left = red**, **right = blue**.
+
+---
+
+### Curated pipeline — `run_condition_across_sessions.py`
+
+**Sessions are not listed in the runner.** Every subdirectory under the condition folder is processed (`discover_sessions` in [`bos_mua/io.py`](bos_mua/io.py)), sorted by date prefix in the session ID.
 
 ```
 S:\...\MUA_curated_sessions\
   Elmo_SHUFFLED\
-    20230607T133602.A_Elmo.B_KN.SCP_01\    ← one session = one subfolder
-    20230614T142422.A_Elmo.B_KN.SCP_01\
+    20230607T133602.A_Elmo.B_KN.SCP_01\
     ...
 ```
 
-For a given condition, the pipeline calls `discover_sessions()` ([`bos_mua/io.py`](bos_mua/io.py)): every **subdirectory** in that folder is treated as a session, sorted by the date prefix in the session ID. **All discovered sessions are processed** — there is no CLI flag to pick individual sessions in `run_condition_across_sessions.py`.
+**Conditions** (`MONKEY_CONDITIONS` in [`bos_mua/preprocess.py`](bos_mua/preprocess.py)):
 
-The curated set is therefore **whatever session folders exist on disk** under that condition path. [`session_lists.m`](session_lists.m) is a separate MATLAB curation note; it is **not** wired into the Python pipeline.
+| Condition | Trial filters |
+|---|---|
+| `Elmo_BLOCKED` / `Curius_BLOCKED` | Dyadic, AgoB, RA1–RA4, `conf_predictability=Blocked` |
+| `Elmo_SHUFFLED` / `Curius_SHUFFLED` | same with `Shuffled` |
 
-#### Restricting which sessions run (individual scripts only)
-
-In [`assess_cross_session_consistency.py`](assess_cross_session_consistency.py), [`plot_best_worst_channels.py`](plot_best_worst_channels.py), and [`replot_consistency_figures.py`](replot_consistency_figures.py):
-
-```python
-SESSION_IDS = None  # None → all sessions in the condition folder
-# SESSION_IDS = ["20210401T124246.A_Elmo.B_KN.SCP_01", ...]  # explicit subset
-```
-
-`run_condition_across_sessions.py` always uses all discovered sessions. To restrict, set `SESSION_IDS` in those modules before running, or remove/rename session folders under the condition directory.
-
-### What the condition name controls
-
-Valid condition names are fixed in `MONKEY_CONDITIONS` ([`bos_mua/preprocess.py`](bos_mua/preprocess.py)):
-
-| Condition | Data folder | `conf_predictability` trial filter |
-|---|---|---|
-| `Elmo_BLOCKED` | `.../Elmo_BLOCKED/` | `Blocked` |
-| `Elmo_SHUFFLED` | `.../Elmo_SHUFFLED/` | `Shuffled` |
-| `Curius_BLOCKED` | `.../Curius_BLOCKED/` | `Blocked` |
-| `Curius_SHUFFLED` | `.../Curius_SHUFFLED/` | `Shuffled` |
-
-Shared trial filters (via `trial_filters_for_condition()`): Dyadic, AgoB, RA1–RA4. Left/right split uses `Al` / `Ar`.
-
-### `run_condition_across_sessions.py` — full pipeline entry point
-
-Runs all sessions in one (or all) condition(s), in order:
-
-1. **`session_lr`** — per-session L/R PDFs (original + z-scored)
-2. **`consistency`** — cross-session figures + CSV
-3. **`combine`** — z-scored pooled L/R PDFs across sessions
-4. **`best_worst`** — best/worst/tuned-stable channel deep dives
+L/R split: `A_LR_pos_list` → `Al` / `Ar` (both monkeys in curated set).
 
 ```bash
 python -u run_condition_across_sessions.py Elmo_SHUFFLED
 python -u run_condition_across_sessions.py Curius_BLOCKED
-python -u run_condition_across_sessions.py --all
+python -u run_condition_across_sessions.py --all          # all four conditions sequentially
 python -u run_condition_across_sessions.py Elmo_BLOCKED --steps session_lr,consistency
 ```
 
-Use `python -u` for unbuffered progress on long runs (~1–2 hours per condition on the network drive).
+Use `python -u` on long network-drive runs (~1–2 h per condition).
 
-#### CLI arguments
-
-**`condition`** (positional, optional)
-
-One of: `Curius_BLOCKED`, `Curius_SHUFFLED`, `Elmo_BLOCKED`, `Elmo_SHUFFLED`.
-
-Runs the selected pipeline steps on **every session** in that condition folder. Mutually exclusive with `--all`.
-
-**`--all`**
-
-Runs the **same pipeline sequentially for all four conditions** in `MONKEY_CONDITIONS`:
-
-1. `Curius_BLOCKED`
-2. `Curius_SHUFFLED`
-3. `Elmo_BLOCKED`
-4. `Elmo_SHUFFLED`
-
-Equivalent to invoking the script four times with each condition name. This means **all four monkey/condition combinations**, not “all sessions” (all sessions is already the default when you pass one condition). Cannot be combined with a positional `condition` argument. Expect roughly 4× the runtime of a single condition.
-
-**`--steps`**
-
-Comma-separated subset of steps. Default: all four (`session_lr,consistency,combine,best_worst`).
-
-| Step | Script | Output |
-|---|---|---|
-| `session_lr` | `plot_session_lr_mua` | `figures/{original\|zscored}/{CONDITION}/*.pdf` |
-| `consistency` | `assess_cross_session_consistency` | `figures/{original\|zscored}/consistency/{CONDITION}/` |
-| `combine` | `combine_sessions` (z-scored only) | `figures/zscored/{CONDITION}/combined/` |
-| `best_worst` | `plot_best_worst_channels` | deep-dive PDFs under `consistency/{CONDITION}/` |
-
-Steps always run in the order above, regardless of how they are listed on the command line.
-
-#### Not configured via CLI
-
-| Setting | Where it lives |
-|---|---|
-| `DATA_ROOT` | Hardcoded in each script (`S:\taskcontroller\...\MUA_curated_sessions`) |
-| Which sessions | All subdirs in the condition folder (unless `SESSION_IDS` is set in sub-scripts) |
-| Single session only | `SESSION_ID` in `plot_session_lr_mua.py` (not exposed by the runner) |
-| Reference session for consistency scatter | `REFERENCE_SESSION` in `assess_cross_session_consistency.py` (default: earliest by date) |
-| Analysis window, smoothing, z-score modes | Constants at top of each script |
-
-The runner patches `CONDITION_FOLDER` and `TRIAL_FILTERS` on imported modules at runtime; it does not change defaults saved in those files on disk.
-
-#### Examples
-
-```bash
-# Full Elmo SHUFFLED analysis, all sessions in that folder
-python -u run_condition_across_sessions.py Elmo_SHUFFLED
-
-# Full pipeline for all four monkey/condition combinations
-python -u run_condition_across_sessions.py --all
-
-# Only session plots + consistency for Curius BLOCKED
-python -u run_condition_across_sessions.py Curius_BLOCKED --steps session_lr,consistency
-```
-
-### Individual scripts
-
-Use these when you need one step or manual control over constants:
-
-| Script | Purpose |
-|---|---|
-| [`plot_session_lr_mua.py`](plot_session_lr_mua.py) | Per-session L/R PDFs; set `CONDITION_FOLDER = None` for all conditions |
-| [`assess_cross_session_consistency.py`](assess_cross_session_consistency.py) | Cross-session consistency; set `CONDITION_FOLDER` |
-| [`combine_sessions.py`](combine_sessions.py) | Pooled cross-session L/R (z-scored); loops all `MONKEY_CONDITIONS` in `main()` |
-| [`plot_best_worst_channels.py`](plot_best_worst_channels.py) | Best/worst/tuned-stable deep dives |
-| [`replot_consistency_figures.py`](replot_consistency_figures.py) | Replot heatmaps only |
-
-```bash
-python assess_cross_session_consistency.py
-python replot_consistency_figures.py   # si_heatmap + signed_sig_heatmap only
-```
-
-### Output layout
-
-Set `RUN_BOTH_PROCESSING = True` in the consistency scripts to generate both original and z-scored outputs.
+**Output layout** (under repo or configured `OUTPUT_DIR`):
 
 ```
 figures/
-  original/
-    {Monkey}_{BLOCKED|SHUFFLED}/     # per-session L/R PDFs
-    consistency/
-      {Monkey}_{BLOCKED|SHUFFLED}/   # cross-session figures
-  zscored/
-    {Monkey}_{BLOCKED|SHUFFLED}/     # per-session L/R PDFs
-    {Monkey}_{BLOCKED|SHUFFLED}/combined/   # pooled sessions
-    consistency/
-      {Monkey}_{BLOCKED|SHUFFLED}/
+  original/{CONDITION}/              # per-session L/R PDFs
+  original/consistency/{CONDITION}/  # cross-session figures + CSV
+  zscored/{CONDITION}/
+  zscored/{CONDITION}/combined/      # pooled sessions (per-channel panels)
+  zscored/consistency/{CONDITION}/
 ```
 
-| Mode | Session L/R PDFs | Combined sessions | Consistency figures |
+To restrict sessions when running individual scripts, set `SESSION_IDS` in `assess_cross_session_consistency.py`, `plot_best_worst_channels.py`, or `replot_consistency_figures.py`.
+
+---
+
+### Session-list pipeline — `run_session_list_across_sessions.py`
+
+Reads session IDs from [`session_lists.m`](session_lists.m). Each named cell array (e.g. `DUAL_NHP`, `Elmo_BLOCKED_CONF`) defines `root_folder`, sessions, and output path `{root_folder}/{list_name}/`.
+
+**Flat export layout:**
+
+```
+S:\...\MUA_export_per_session\
+  20210127T130717.A_Elmo.B_FS.SCP_01\    ← session folders directly under root_folder
+  ...
+```
+
+Confederate lists (`*_CONF`) use the go-seq split pipeline (see table below). Other flat lists without the confederate naming pattern fall back to a single AgoB-only run via `build_flat_session_list_context`.
+
+**Named lists in [`session_lists.m`](session_lists.m):**
+
+| List | Sessions | Output |
+|---|---|---|
+| `DUAL_NHP` | 8 paired exports | see below |
+| `Elmo_BLOCKED_CONF` | 40 | `{root}/Elmo_BLOCKED_CONF/{Monkey}_{AgoB\|BgoA}/figures/…` |
+| `Elmo_SHUFFLED_CONF` | 13 | `{root}/Elmo_SHUFFLED_CONF/{Monkey}_{AgoB\|BgoA}/figures/…` |
+| `Curius_BLOCKED_CONF` | 22 | `{root}/Curius_BLOCKED_CONF/{Monkey}_{AgoB\|BgoA}/figures/…` |
+| `Curius_SHUFFLED_CONF` | 15 | `{root}/Curius_SHUFFLED_CONF/{Monkey}_{AgoB\|BgoA}/figures/…` |
+| `ElmoBLOCKED_SpikeSortedSessions` | 6 | *(not runnable — name lacks `Elmo_BLOCKED_` prefix)* |
+
+Confederate lists run **two timing splits** (AgoB + BgoA) plus **`timing_compare`** (first vs second), mirroring DUAL_NHP per-monkey layout. Trial filters: Dyadic + `{AgoB|BgoA}` + Blocked/Shuffled + RA1–RA4. L/R: `Al`/`Ar` for Curius, `Bl`/`Br` for Elmo.
+
+**Output layout** (example `Curius_SHUFFLED_CONF`):
+
+```
+{root_folder}/Curius_SHUFFLED_CONF/
+  Curius_AgoB/figures/{original|zscored}/...
+  Curius_BgoA/figures/...
+  Curius_AgoB/figures/zscored/combined/*_arrays_combined_LR.pdf
+  Curius_first_second_comparison/    # timing_compare
+```
+
+```bash
+python -u run_session_list_across_sessions.py --list
+python -u run_session_list_across_sessions.py Curius_SHUFFLED_CONF
+python -u run_session_list_across_sessions.py Elmo_BLOCKED_CONF --go-seq BgoA
+python -u run_session_list_across_sessions.py Curius_SHUFFLED_CONF --steps session_lr,consistency
+python -u compare_monkey_timing_conditions.py --monkey Curius --list-name Curius_SHUFFLED_CONF
+```
+
+Validate parsing: `python -m unittest tests.test_session_lists tests.test_dual_nhp_pipeline tests.test_confederate_pipeline`.
+
+**Note:** An older monolithic run may exist at `{root}/{list_name}/figures/` (AgoB-only, pre go-seq split); re-run overwrites nothing there — new outputs go under `{Monkey}_{AgoB|BgoA}/`.
+
+#### DUAL_NHP — paired dual-monkey export
+
+Eight paired sessions (4 dates × 2 spike-sorted exports). Split by **recorded monkey**:
+
+- Datetime suffix **`U`** or no `B` → **Curius** export  
+- Datetime suffix **`B`** → **Elmo** export  
+
+(Future **confederate** lists: only one monkey's neural data — sessions assigned via `.A_Curius.` / `.A_Elmo.` in the ID; empty monkey buckets are skipped.)
+
+**Four analysis runs** (monkey × timing), each with isolated output:
+
+| Run | go_seq filter | L/R field | Meaning |
 |---|---|---|---|
-| Raw MUA | `./figures/original/{CONDITION}/` | — | `./figures/original/consistency/{CONDITION}/` |
-| Z-scored MUA | `./figures/zscored/{CONDITION}/` | `./figures/zscored/{CONDITION}/combined/` | `./figures/zscored/consistency/{CONDITION}/` |
+| `Curius_AgoB` | AgoB | `A_LR_pos_list` Al/Ar | Curius first |
+| `Curius_BgoA` | BgoA | `A_LR_pos_list` Al/Ar | Curius second |
+| `Elmo_AgoB` | AgoB | `B_LR_pos_list` Bl/Br | Elmo second |
+| `Elmo_BgoA` | BgoA | `B_LR_pos_list` Bl/Br | Elmo first |
 
-Z-scoring: per channel, concatenate all trials in a session, subtract mean, divide by SD, then apply trial masks and smoothing. Use z-scored outputs when session-to-session amplitude differences dominate; use original when absolute units matter.
+Trial filters per run: Dyadic + `{AgoB|BgoA}` + RA1–RA4 (no `conf_predictability`).
 
-Plot colors: **left = red**, **right = blue** (same in session and combined plots).
+**Output layout:**
+
+```
+{root_folder}/DUAL_NHP/
+  Curius_AgoB/figures/{original|zscored}/...
+  Curius_BgoA/figures/...
+  Elmo_AgoB/figures/...
+  Elmo_BgoA/figures/...
+  {Monkey}_{AgoB|BgoA}/figures/zscored/combined/
+    {Condition}_{event}_A1_combined_LR.pdf      # per-channel panels
+    {Condition}_{event}_arrays_combined_LR.pdf   # array-mean ± SE (array_combined step)
+  {Monkey}_first_second_comparison/             # timing_compare (AgoB vs BgoA per monkey)
+    si_scatter.pdf, delta_si_heatmap.pdf, similar10/worst10 deep dives, CSVs, ...
+```
+
+```bash
+# Full pipeline: 4 monkey×timing runs + array plots + first/second comparison
+python -u run_session_list_across_sessions.py DUAL_NHP
+
+# Subset
+python -u run_session_list_across_sessions.py DUAL_NHP --go-seq AgoB
+python -u run_session_list_across_sessions.py DUAL_NHP --monkey Curius --go-seq BgoA
+python -u run_session_list_across_sessions.py DUAL_NHP --steps session_lr,consistency
+
+# Array plots only (after combine)
+python -u plot_export_condition_arrays.py --all
+
+# First-vs-second only (one monkey)
+python -u compare_monkey_timing_conditions.py --monkey Curius
+```
+
+**DUAL_NHP CLI flags:** `--monkey {Curius|Elmo}`, `--go-seq {AgoB|BgoA|all}` (default `all`).
+
+---
+
+### Individual scripts
+
+Use when you need one step or manual constants:
+
+| Script | Purpose |
+|---|---|
+| [`plot_session_lr_mua.py`](plot_session_lr_mua.py) | Per-session L/R PDFs |
+| [`assess_cross_session_consistency.py`](assess_cross_session_consistency.py) | Cross-session consistency |
+| [`combine_sessions.py`](combine_sessions.py) | Pooled cross-session L/R (z-scored) |
+| [`plot_export_condition_arrays.py`](plot_export_condition_arrays.py) | Array-mean combined L/R (DUAL_NHP) |
+| [`compare_monkey_timing_conditions.py`](compare_monkey_timing_conditions.py) | AgoB vs BgoA comparison (DUAL_NHP) |
+| [`plot_best_worst_channels.py`](plot_best_worst_channels.py) | Best/worst/tuned-stable deep dives |
+| [`replot_consistency_figures.py`](replot_consistency_figures.py) | Replot heatmaps only |
+
+The runners patch module globals via [`bos_mua/run_context.py`](bos_mua/run_context.py) (`PipelineContext`: filters, choice field, `recording_monkey`, paths). DUAL_NHP logic lives in [`bos_mua/dual_nhp.py`](bos_mua/dual_nhp.py).
+
+Set `RUN_BOTH_PROCESSING = True` in consistency scripts for original + z-scored outputs.
 
 ## Cross-session consistency
 
@@ -348,9 +382,9 @@ Nominal channel IDs (`ch001`–`ch160`) are physical electrode indices and may n
 
 For each **session × channel**:
 
-1. Load event-aligned MUA; optionally z-score trials per channel.
-2. Apply trial filters (configurable; default: Blocked dyadic, AgoB, rewarded RA1–RA4).
-3. Split trials by monkey choice (`Al` = left, `Ar` = right); Gaussian-smooth (default 50 ms).
+1. Load event-aligned MUA; optionally z-score per channel (μ/σ from actor trials).
+2. Apply trial filters (curated: Blocked/Shuffled dyadic AgoB RA1–RA4; DUAL_NHP: Dyadic + AgoB or BgoA + RA1–RA4).
+3. Split trials by choice field (`Al`/`Ar` for Curius, `Bl`/`Br` for Elmo in DUAL_NHP); Gaussian-smooth (default 50 ms).
 4. Compute mean left/right timecourses and **difference wave** `Δ(t) = μ_L(t) − μ_R(t)`.
 5. In the analysis window (default −500 to +500 ms relative to event):
    - Window-mean firing rates per trial (left vs right).
@@ -381,6 +415,12 @@ Channels need ≥ `MIN_TRIALS_PER_GROUP` trials per side to contribute statistic
 ---
 
 ### Visualization tiers
+
+Figures below live under:
+
+- **Curated:** `figures/{original|zscored}/consistency/{CONDITION}/`
+- **Session-list (flat):** `{root_folder}/{list_name}/figures/{original|zscored}/consistency/`  
+  DUAL_NHP: `{root_folder}/DUAL_NHP/{Monkey}_{AgoB|BgoA}/figures/{original|zscored}/consistency/`
 
 Figures are grouped into three tiers: **overview → array-level waveforms → channel diagnostics**.
 
@@ -415,7 +455,7 @@ Use these first to see which channels and sessions are worth inspecting.
 
 ### Practical workflow
 
-1. Run `python -u run_condition_across_sessions.py {CONDITION}` for the condition of interest (or `--all` for every monkey/condition).
+1. Run the appropriate runner (`run_condition_across_sessions.py {CONDITION}` or `run_session_list_across_sessions.py DUAL_NHP`).
 2. **Tier 1:** Scan `si_heatmap.pdf` and `channel_stability.csv`; note channels with high sign concordance but low r (direction stable, shape not).
 3. **Tier 2:** Open `delta_consensus_*.pdf` for arrays with candidate channels; confirm waveform agreement in the analysis window.
 4. **Tier 3:** Use `deep_dive_ch*.pdf` to diagnose failures (gain change vs remapping vs noise).
@@ -427,13 +467,15 @@ Default stability thresholds in script: **median pairwise r ≥ 0.5**, **ICC ≥
 
 ### Configuration pointers
 
-Key settings at the top of [`assess_cross_session_consistency.py`](assess_cross_session_consistency.py) and [`run_condition_across_sessions.py`](run_condition_across_sessions.py):
+Key settings at the top of [`assess_cross_session_consistency.py`](assess_cross_session_consistency.py), [`run_condition_across_sessions.py`](run_condition_across_sessions.py), and [`run_session_list_across_sessions.py`](run_session_list_across_sessions.py):
 
-- `CONDITION_FOLDER` — which monkey/condition folder to analyze (runner sets this from CLI)
-- `SESSION_IDS` — `None` = all sessions in folder; or an explicit list (individual scripts only)
-- `TRIAL_FILTERS` — `None` = auto `Blocked`/`Shuffled` from condition name via `trial_filters_for_condition()`
-- `LEFT_CHOICE` / `RIGHT_CHOICE` — default `Al` / `Ar`
+- `CONDITION_FOLDER` / CLI list name — which run to analyze (curated condition or `session_lists.m` entry)
+- `SESSION_IDS` — `None` = all sessions in folder/list; or an explicit list (individual scripts only)
+- `TRIAL_FILTERS` — `None` = auto from condition name / list prefix via `trial_filters_for_condition()`
+- `LEFT_CHOICE` / `RIGHT_CHOICE` — default `Al` / `Ar` (runners override for Elmo / DUAL_NHP Elmo runs)
 - `ANALYSIS_WINDOW_MS`, `GAUSSIAN_SMOOTH_MS`, `ZSCORE_MUA`, `RUN_BOTH_PROCESSING`
 - `REFERENCE_SESSION` — reference for Tier 1 SI scatter (default: earliest session)
 - `DEEP_DIVE_UNSTABLE_ONLY`, `MAX_DEEP_DIVE_CHANNELS` — Tier 3 selection
 - `SHOW_SESSION_TRACES`, `SESSION_COLORMAP` — Tier 2 session overlay appearance
+
+`timing_compare` runs for **DUAL_NHP** and **confederate** session lists; curated runs skip it.

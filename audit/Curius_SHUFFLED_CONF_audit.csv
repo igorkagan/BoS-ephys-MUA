@@ -1,0 +1,16 @@
+session_id,dataset,problem,n_Dyadic,n_SemiSolo,n_SoloA,n_SoloARewardAB,n_SoloB,n_SoloBRewardAB
+20230607T115959,Curius_SHUFFLED_CONF,-,405,-,255,-,-,-
+20230608T102315,Curius_SHUFFLED_CONF,A_Reward_list absent from trialinfo.4python.mat,-,-,-,-,-,-
+20230609T101610,Curius_SHUFFLED_CONF,-,313,-,206,-,-,-
+20230613T104336,Curius_SHUFFLED_CONF,A_Reward_list absent from trialinfo.4python.mat,-,-,-,-,-,-
+20230614T114327,Curius_SHUFFLED_CONF,-,531,-,342,-,-,-
+20230615T122340,Curius_SHUFFLED_CONF,A_Reward_list absent from trialinfo.4python.mat; B_Reward_list absent from trialinfo.4python.mat,-,-,-,-,-,-
+20230616T094811,Curius_SHUFFLED_CONF,-,300,-,-,-,-,0
+20230619T102732,Curius_SHUFFLED_CONF,-,326,-,119,-,-,-
+20230620T101238,Curius_SHUFFLED_CONF,-,413,-,101,-,-,-
+20230621T100721,Curius_SHUFFLED_CONF,-,533,-,118,-,-,-
+20230622T111856,Curius_SHUFFLED_CONF,-,461,-,152,-,-,-
+20230627T094057,Curius_SHUFFLED_CONF,-,325,-,134,-,-,-
+20230628T101631,Curius_SHUFFLED_CONF,-,455,-,35,-,-,-
+20230629T100435,Curius_SHUFFLED_CONF,-,399,-,294,-,-,-
+20230703T122644,Curius_SHUFFLED_CONF,-,542,-,195,-,-,-
