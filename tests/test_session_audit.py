@@ -9,13 +9,15 @@ from pathlib import Path
 import numpy as np
 
 from bos_mua.session_audit import (
-    REWARDED,
+    REWARDED_A,
+    REWARDED_B,
     audit_labels,
     audit_session,
     format_markdown,
     list_monkey_from_list_name,
     reward_field_for_trial_type,
     session_id_prefix,
+    session_pair_from_id,
     write_csv,
 )
 
@@ -56,7 +58,7 @@ class AuditLabelsTests(unittest.TestCase):
                 "None",
             ],
             A_Reward_list=["RA1", "RA0", "RA2", "RA3", "RA4", "RA1", "RA2", "RA0"],
-            B_Reward_list=["RA0", "RA0", "RA0", "RA0", "RA0", "RA3", "RA4", "RA0"],
+            B_Reward_list=["RB0", "RB0", "RB0", "RB0", "RB0", "RB3", "RB4", "RB0"],
         )
         row = audit_labels(
             labels,
@@ -65,6 +67,7 @@ class AuditLabelsTests(unittest.TestCase):
             list_monkey="Curius",
         )
         self.assertEqual(row.session_id, "20230607T115959")
+        self.assertEqual(row.session_pair, "A_Curius.B_VC")
         self.assertEqual(row.problem, "-")
         self.assertEqual(row.n_Dyadic, "1")
         self.assertEqual(row.n_SemiSolo, "1")
@@ -100,7 +103,7 @@ class AuditLabelsTests(unittest.TestCase):
             list_monkey="Curius",
         )
         self.assertEqual(row.n_SoloA, "0")
-        self.assertEqual(row.problem, "-")
+        self.assertIn("suspicious: 2 SoloA trials but 0 rewarded", row.problem)
 
     def test_missing_reward_field_reports_problem(self) -> None:
         labels = _labels(
@@ -120,7 +123,7 @@ class AuditLabelsTests(unittest.TestCase):
     def test_elmo_dyadic_uses_b_reward(self) -> None:
         labels = _labels(
             TrialSubType_list=["Dyadic", "Dyadic"],
-            B_Reward_list=["RA1", "RA2"],
+            B_Reward_list=["RB1", "RB2"],
         )
         row = audit_labels(
             labels,
@@ -160,8 +163,9 @@ class AuditLabelsTests(unittest.TestCase):
         for col in row.count_values():
             self.assertEqual(col, "-")
 
-    def test_rewarded_set(self) -> None:
-        self.assertEqual(REWARDED, frozenset({"RA1", "RA2", "RA3", "RA4"}))
+    def test_rewarded_sets(self) -> None:
+        self.assertEqual(REWARDED_A, frozenset({"RA1", "RA2", "RA3", "RA4"}))
+        self.assertEqual(REWARDED_B, frozenset({"RB1", "RB2", "RB3", "RB4"}))
 
 
 class AuditSessionDiskTests(unittest.TestCase):
@@ -202,8 +206,67 @@ class OutputFormatTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = write_csv([row], Path(tmp) / "audit.csv")
             text = path.read_text(encoding="utf-8")
-            self.assertIn("session_id,dataset,problem", text)
+            self.assertIn("session_id,session_pair,dataset,problem", text)
             self.assertIn("20230607T115959", text)
+
+
+class SessionPairTests(unittest.TestCase):
+    def test_conf_session_pair(self) -> None:
+        self.assertEqual(
+            session_pair_from_id("20230621T100721.A_Curius.B_MK.SCP_01"),
+            "A_Curius.B_MK",
+        )
+
+    def test_dual_nhp_session_pair(self) -> None:
+        self.assertEqual(
+            session_pair_from_id("20230623T124557B.A_Curius.B_Elmo.SCP_01"),
+            "A_Curius.B_Elmo",
+        )
+
+
+class DualNhpAuditTests(unittest.TestCase):
+    def test_elmo_export_dyadic_uses_rb_tiers(self) -> None:
+        labels = _labels(
+            TrialSubType_list=["Dyadic", "Dyadic", "Dyadic"],
+            B_Reward_list=["RB1", "RB2", "RB0"],
+        )
+        row = audit_labels(
+            labels,
+            session_id="20230623T124557B.A_Curius.B_Elmo.SCP_01",
+            dataset="DUAL_NHP",
+            list_monkey=None,
+        )
+        self.assertEqual(row.n_Dyadic, "2")
+        self.assertEqual(row.problem, "-")
+
+    def test_curius_export_dyadic_uses_ra_tiers(self) -> None:
+        labels = _labels(
+            TrialSubType_list=["Dyadic", "Dyadic"],
+            A_Reward_list=["RA1", "RA4"],
+        )
+        row = audit_labels(
+            labels,
+            session_id="20230623T124557U.A_Curius.B_Elmo.SCP_01",
+            dataset="DUAL_NHP",
+            list_monkey=None,
+        )
+        self.assertEqual(row.n_Dyadic, "2")
+
+
+class SanityCheckTests(unittest.TestCase):
+    def test_wrong_tier_prefix_flags_suspicious(self) -> None:
+        labels = _labels(
+            TrialSubType_list=["Dyadic", "Dyadic", "Dyadic"],
+            B_Reward_list=["RA1", "RA2", "RA3"],
+        )
+        row = audit_labels(
+            labels,
+            session_id="20210401T124246.A_Elmo.B_KN.SCP_01",
+            dataset="Elmo_BLOCKED_CONF",
+            list_monkey="Elmo",
+        )
+        self.assertEqual(row.n_Dyadic, "0")
+        self.assertIn("suspicious: 3 Dyadic trials but 0 rewarded", row.problem)
 
 
 if __name__ == "__main__":

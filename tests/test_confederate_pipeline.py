@@ -10,7 +10,7 @@ from bos_mua.session_lists import (
     is_confederate_list,
     load_session_list,
 )
-from compare_monkey_timing_conditions import load_timing_run
+from bos_mua.steps.timing_compare import load_timing_run
 
 REPO = Path(__file__).resolve().parents[1]
 

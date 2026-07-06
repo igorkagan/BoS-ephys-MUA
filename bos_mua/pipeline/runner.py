@@ -5,10 +5,10 @@ from __future__ import annotations
 import warnings
 from pathlib import Path
 
-import assess_cross_session_consistency as acc
-import combine_sessions as cs
-import plot_best_worst_channels as pbw
-import plot_session_lr_mua as psl
+from bos_mua.steps import best_worst as pbw
+from bos_mua.steps import combine as cs
+from bos_mua.steps import consistency as acc
+from bos_mua.steps import session_lr as psl
 from bos_mua.confederate import iter_confederate_runs
 from bos_mua.dual_nhp import iter_dual_nhp_runs
 from bos_mua.preprocess import (
@@ -117,7 +117,7 @@ def run_pipeline_steps(ctx: PipelineContext, steps: list[str]) -> None:
                 f"need >={cs.MIN_SESSIONS} sessions, found {len(session_ids)}"
             )
         else:
-            from plot_export_condition_arrays import plot_condition_array_combined
+            from bos_mua.steps.array_combined import plot_condition_array_combined
 
             plot_condition_array_combined(ctx)
 
@@ -200,7 +200,7 @@ def run_dual_nhp_pipeline(
             "No DUAL_NHP runs matched (check session list and --monkey / --go-seq filters)"
         )
     if "timing_compare" in steps:
-        import compare_monkey_timing_conditions as timing
+        from bos_mua.steps import timing_compare as timing
 
         for name in sorted(monkeys_run):
             print("\n" + "#" * 72)
@@ -236,7 +236,7 @@ def run_confederate_pipeline(
             f"No confederate runs matched for {list_name!r} (check --go-seq filter)"
         )
     if "timing_compare" in steps:
-        import compare_monkey_timing_conditions as timing
+        from bos_mua.steps import timing_compare as timing
 
         print("\n" + "#" * 72)
         print(f"# {list_name} / {monkey}_first_second_comparison")

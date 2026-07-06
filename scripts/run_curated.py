@@ -1,32 +1,27 @@
 #!/usr/bin/env python3
 """Run full analysis pipeline for one or all monkey/condition folders.
 
-Steps (all sessions in the condition):
-  1. plot_session_lr_mua — per-session L/R PDFs (original + z-scored)
-  2. assess_cross_session_consistency — cross-session figures + CSV
-  3. combine_sessions — z-scored pooled L/R PDFs
-  4. plot_best_worst_channels — best/worst/tuned-stable deep dives
-
 Usage:
-    python -u run_condition_across_sessions.py Elmo_SHUFFLED
-    python -u run_condition_across_sessions.py Curius_BLOCKED
-    python -u run_condition_across_sessions.py --all
-    python -u run_condition_across_sessions.py Elmo_BLOCKED --steps session_lr,consistency
+    python -u scripts/run_curated.py Elmo_SHUFFLED
+    python -u scripts/run_curated.py Curius_BLOCKED
+    python -u scripts/run_curated.py --all
+    python -u scripts/run_curated.py Elmo_BLOCKED --steps session_lr,consistency
 """
 
 from __future__ import annotations
 
+import _bootstrap  # noqa: F401
 import argparse
 from pathlib import Path
 
-import plot_session_lr_mua as psl
-from bos_mua.pipeline_runner import (
+from bos_mua.pipeline import (
     ALL_STEPS,
     build_curated_context,
     parse_steps,
     run_pipeline_steps,
 )
 from bos_mua.preprocess import MONKEY_CONDITIONS, trial_filters_for_condition
+from bos_mua.steps import session_lr as psl
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -79,13 +74,11 @@ def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
     conditions = resolve_conditions(args)
     steps = parse_steps(args.steps)
-
     for condition in conditions:
-        print("\n" + "#" * 72)
-        print(f"# {condition}")
-        print("#" * 72)
         verify_condition_folder(condition)
-        ctx = build_curated_context(condition, trial_filters_for_condition(condition))
+        ctx = build_curated_context(
+            condition, trial_filters_for_condition(condition),
+        )
         run_pipeline_steps(ctx, steps)
 
 

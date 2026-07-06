@@ -32,7 +32,7 @@ from bos_mua.preprocess import (
     zscore_reference_mask,
 )
 from bos_mua.run_context import resolve_session_dir, session_ids_for_run
-from bos_mua.viz_lr import build_session_lr_suptitle, make_session_array_figure
+from bos_mua.viz.lr import build_session_lr_suptitle, make_session_array_figure
 
 # ---------------------------------------------------------------------------
 # Configuration

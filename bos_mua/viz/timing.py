@@ -11,8 +11,8 @@ from numpy.ma import masked_where
 
 from bos_mua.features import ChannelSummary
 from bos_mua.io import ARRAY_NAMES, CHANNELS_PER_ARRAY, array_nominal_channels, channel_label
-from bos_mua.viz_consistency import HEATMAP_DPI, HEATMAP_FIGSIZE
-from bos_mua.viz_lr import LEFT_COLOR, RIGHT_COLOR, configure_array_time_axis, mark_empty_axis
+from bos_mua.viz.consistency import HEATMAP_DPI, HEATMAP_FIGSIZE
+from bos_mua.viz.lr import LEFT_COLOR, RIGHT_COLOR, configure_array_time_axis, mark_empty_axis
 
 PDF_DPI = 150
 A4_LANDSCAPE_IN = (11.69, 8.27)

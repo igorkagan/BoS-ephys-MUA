@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unittest
 
-from bos_mua.viz_consistency import _deep_dive_subplot_grid
+from bos_mua.viz.consistency import _deep_dive_subplot_grid
 
 
 class DeepDiveSubplotGridTests(unittest.TestCase):

@@ -36,7 +36,7 @@ from bos_mua.tensors import (
     channel_presence_matrix,
     write_channel_presence_csv,
 )
-from bos_mua.viz_consistency import (
+from bos_mua.viz.consistency import (
     plot_deep_dive_channel,
     plot_delta_consensus_array,
     plot_session_similarity,

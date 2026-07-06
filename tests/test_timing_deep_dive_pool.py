@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from compare_monkey_timing_conditions import build_timing_deep_dive_pool, rank_similar_different
+from bos_mua.steps.timing_compare import build_timing_deep_dive_pool, rank_similar_different
 from bos_mua.features import ChannelSummary
 
 

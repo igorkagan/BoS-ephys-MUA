@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 
 from bos_mua.preprocess import trial_filters_for_dual_nhp_go_seq
-from plot_export_condition_arrays import (
+from bos_mua.steps.array_combined import (
     EXPORT_CONDITIONS,
     array_combined_stats,
     build_export_context,

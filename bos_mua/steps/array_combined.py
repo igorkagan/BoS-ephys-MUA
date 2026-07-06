@@ -30,7 +30,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-import combine_sessions as cs
+from bos_mua.steps import combine as cs
 from bos_mua.dual_nhp import (
     ALL_DUAL_NHP_RUNS,
     DualNhpRunKey,
@@ -38,11 +38,11 @@ from bos_mua.dual_nhp import (
     dual_nhp_run_label,
 )
 from bos_mua.io import ARRAY_NAMES, array_nominal_channels, filter_summary
-from bos_mua.pipeline_runner import verify_sessions
+from bos_mua.pipeline import verify_sessions
 from bos_mua.preprocess import processing_label, resolve_condition_output_dir
 from bos_mua.run_context import apply_pipeline_context
 from bos_mua.session_lists import load_dual_nhp_configs
-from bos_mua.viz_lr import configure_array_time_axis
+from bos_mua.viz.lr import configure_array_time_axis
 
 DEFAULT_DUAL_NHP_ROOT = Path(
     r"S:\taskcontroller\SCP_DATA\SCP-CTRL-01\MUA_export_per_session\DUAL_NHP"

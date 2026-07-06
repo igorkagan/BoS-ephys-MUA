@@ -6,7 +6,7 @@ from __future__ import annotations
 import warnings
 from pathlib import Path
 
-from assess_cross_session_consistency import (
+from bos_mua.steps.consistency import (
     CHOICE_FIELD,
     ALIGNMENT_EVENT,
     ANALYSIS_WINDOW_MS,

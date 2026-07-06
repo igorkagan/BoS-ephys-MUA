@@ -2,7 +2,7 @@
 
 How `best10_tuned_stable_chXXX.pdf` files are chosen.
 
-**Scripts:** `assess_cross_session_consistency.py` (automatic on full runs), `plot_best_worst_channels.py` (standalone).
+**Modules:** `bos_mua/steps/consistency.py` (automatic on full runs), `bos_mua/steps/best_worst.py` (standalone).
 
 See also: [best-and-worst-channels.md](best-and-worst-channels.md) (ranking by Δ-waveform correlation only).
 
@@ -49,7 +49,7 @@ Nominal ch001–ch160, usable in **≥ `MIN_SESSIONS` (3)** sessions.
 | Tuning floor | `si_median_abs` | ≥ **0.10** |
 | Task engagement | task-evoked (Friedman) | p < α on L or R trials |
 
-Thresholds: `SIGN_CONCORDANCE_THRESH`, `TUNED_STABLE_SI_STD_MAX`, `TUNED_STABLE_SI_ABS_MIN` in `assess_cross_session_consistency.py`.
+Thresholds: `SIGN_CONCORDANCE_THRESH`, `TUNED_STABLE_SI_STD_MAX`, `TUNED_STABLE_SI_ABS_MIN` in `bos_mua/steps/consistency.py`.
 
 ---
 

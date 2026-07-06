@@ -8,19 +8,18 @@ Outputs:
   Confederate: {root}/{list_name}/{Monkey}_{AgoB|BgoA}/figures/...
 
 Usage:
-    python -u run_session_list_across_sessions.py --list
-    python -u run_session_list_across_sessions.py DUAL_NHP
-    python -u run_session_list_across_sessions.py Curius_SHUFFLED_CONF
-    python -u run_session_list_across_sessions.py DUAL_NHP --monkey Curius --go-seq BgoA
-    python -u run_session_list_across_sessions.py Elmo_BLOCKED_CONF --steps session_lr,consistency
+    python -u scripts/run_session_list.py --list
+    python -u scripts/run_session_list.py DUAL_NHP
+    python -u scripts/run_session_list.py Curius_SHUFFLED_CONF
 """
 
 from __future__ import annotations
 
+import _bootstrap  # noqa: F401
 import argparse
 from pathlib import Path
 
-from bos_mua.pipeline_runner import (
+from bos_mua.pipeline import (
     ALL_STEPS,
     build_flat_session_list_context,
     parse_steps,

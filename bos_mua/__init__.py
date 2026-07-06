@@ -1,1 +1,1 @@
-"""BoS curated MUA loading, feature extraction, and cross-session stability."""
+"""BoS curated MUA: loading, features, stability, pipeline steps, and visualization."""

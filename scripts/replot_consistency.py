@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Replot SI heatmaps only (portrait full-page, original + z-scored)."""
 
+import _bootstrap  # noqa: F401
 from pathlib import Path
 
-from assess_cross_session_consistency import (
-    CHOICE_FIELD,
+from bos_mua.steps.consistency import (
     ALIGNMENT_EVENT,
     ALPHA,
     ANALYSIS_WINDOW_MS,
+    CHOICE_FIELD,
     CONDITION_FOLDER,
     DATA_ROOT,
     GAUSSIAN_SMOOTH_MS,
@@ -22,11 +23,11 @@ from assess_cross_session_consistency import (
     ZSCORE_MUA,
     filter_summary,
 )
-from bos_mua.tensors import build_tensors
 from bos_mua.features import extract_session_summaries
 from bos_mua.io import discover_sessions
 from bos_mua.preprocess import processing_label, resolve_consistency_dir, trial_filters_for_condition
-from bos_mua.viz_consistency import plot_si_heatmap, plot_signed_sig_heatmap
+from bos_mua.tensors import build_tensors
+from bos_mua.viz.consistency import plot_si_heatmap, plot_signed_sig_heatmap
 
 
 def replot_heatmaps(zscore_mua: bool) -> None:

@@ -38,7 +38,7 @@ from bos_mua.session_lists import (
     load_session_list,
 )
 from bos_mua.stability import assess_channel_stability, channel_task_evoked_all_sessions
-from bos_mua.viz_timing import (
+from bos_mua.viz.timing import (
     plot_delta_si_heatmap,
     plot_delta_si_vs_mean_si_scatter,
     plot_median_delta_si_by_array,

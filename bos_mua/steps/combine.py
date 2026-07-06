@@ -12,7 +12,7 @@ import warnings
 from collections import defaultdict
 from pathlib import Path
 
-from bos_mua.viz_lr import configure_array_time_axis
+from bos_mua.viz.lr import configure_array_time_axis
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.io import loadmat

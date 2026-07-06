@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
-"""Audit confederate session lists: rewarded trial counts and label problems.
+"""Audit session lists: rewarded trial counts and label problems.
 
 Usage:
-    python -u audit_conf_sessions.py --list Curius_SHUFFLED_CONF
-    python -u audit_conf_sessions.py --all-conf
+    python -u scripts/audit_conf_sessions.py --list Curius_SHUFFLED_CONF
+    python -u scripts/audit_conf_sessions.py --all-conf
+    python -u scripts/audit_conf_sessions.py --dual-nhp
 """
 
 from __future__ import annotations
 
+import _bootstrap  # noqa: F401
 import argparse
 from pathlib import Path
 
 from bos_mua.session_audit import (
     audit_all_conf_lists,
+    audit_dual_nhp_list,
     audit_session_list,
     format_markdown,
     write_csv,
@@ -22,7 +25,7 @@ from bos_mua.session_lists import is_confederate_list, list_available_session_li
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Audit confederate session lists for trial labels and rewarded counts.",
+        description="Audit session lists for trial labels and rewarded counts.",
     )
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument(
@@ -34,6 +37,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--all-conf",
         action="store_true",
         help="Audit all confederate lists (4 lists, ~90 sessions)",
+    )
+    group.add_argument(
+        "--dual-nhp",
+        action="store_true",
+        help="Audit DUAL_NHP list (8 sessions) → audit/DUAL_NHP_audit.csv",
     )
     parser.add_argument(
         "--session-lists",
@@ -56,6 +64,10 @@ def main(argv: list[str] | None = None) -> None:
         rows = audit_all_conf_lists(session_lists_path=args.session_lists)
         csv_path = write_csv(rows, output_dir / "all_conf_audit.csv")
         title = "All confederate session lists"
+    elif args.dual_nhp:
+        rows = audit_dual_nhp_list(session_lists_path=args.session_lists)
+        csv_path = write_csv(rows, output_dir / "DUAL_NHP_audit.csv")
+        title = "DUAL_NHP"
     else:
         list_name = args.list
         if not is_confederate_list(list_name):

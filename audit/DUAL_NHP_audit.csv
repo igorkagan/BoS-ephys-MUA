@@ -1,0 +1,9 @@
+session_id,session_pair,dataset,problem,n_Dyadic,n_SemiSolo,n_SoloA,n_SoloARewardAB,n_SoloB,n_SoloBRewardAB
+20230623T124557U,A_Curius.B_Elmo,DUAL_NHP,-,356,-,-,230,-,174
+20230623T124557B,A_Curius.B_Elmo,DUAL_NHP,-,356,-,-,230,-,174
+20230630T115937,A_Curius.B_Elmo,DUAL_NHP,-,226,-,-,550,-,-
+20230630T115937B,A_Curius.B_Elmo,DUAL_NHP,-,226,-,-,550,-,-
+20230704T130229,A_Curius.B_Elmo,DUAL_NHP,-,371,-,522,-,-,-
+20230704T130229B,A_Curius.B_Elmo,DUAL_NHP,-,371,-,522,-,-,-
+20230707T102457,A_Curius.B_Elmo,DUAL_NHP,-,177,-,-,84,-,-
+20230707T102457B,A_Curius.B_Elmo,DUAL_NHP,-,177,-,-,84,-,-

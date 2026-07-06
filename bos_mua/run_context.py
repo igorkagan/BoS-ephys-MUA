@@ -95,10 +95,10 @@ def session_ids_for_run(
 
 def apply_pipeline_context(ctx: PipelineContext) -> None:
     """Patch imported analysis modules for the current pipeline run."""
-    import assess_cross_session_consistency as acc
-    import combine_sessions as cs
-    import plot_best_worst_channels as pbw
-    import plot_session_lr_mua as psl
+    from bos_mua.steps import best_worst as pbw
+    from bos_mua.steps import combine as cs
+    from bos_mua.steps import consistency as acc
+    from bos_mua.steps import session_lr as psl
 
     figures_dir = ctx.output_base / "figures"
     data_root = str(ctx.data_root)

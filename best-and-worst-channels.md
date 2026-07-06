@@ -2,13 +2,13 @@
 
 How `best10_chXXX.pdf` and `worst10_chXXX.pdf` are chosen in the cross-session consistency pipeline.
 
-**Scripts:** `assess_cross_session_consistency.py` (automatic on full runs), `plot_best_worst_channels.py` (standalone).
+**Modules:** `bos_mua/steps/consistency.py` (automatic on full runs), `bos_mua/steps/best_worst.py` (standalone).
 
 ---
 
 ## Output locations
 
-**Curated** (`run_condition_across_sessions.py`):
+**Curated** (`scripts/run_curated.py`):
 
 ```
 figures/{original,zscored}/consistency/{Elmo_BLOCKED,Elmo_SHUFFLED,Curius_BLOCKED,Curius_SHUFFLED}/
@@ -16,7 +16,7 @@ figures/{original,zscored}/consistency/{Elmo_BLOCKED,Elmo_SHUFFLED,Curius_BLOCKE
   worst10_chXXX.pdf
 ```
 
-**DUAL_NHP / flat session lists** (`run_session_list_across_sessions.py`):
+**DUAL_NHP / flat session lists** (`scripts/run_session_list.py`):
 
 ```
 {root_folder}/DUAL_NHP/{Monkey}_{AgoB|BgoA}/figures/{original,zscored}/consistency/

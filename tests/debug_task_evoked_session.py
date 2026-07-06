@@ -24,7 +24,7 @@ from bos_mua.io import (
 )
 from bos_mua.preprocess import trial_filters_for_dual_nhp
 from bos_mua.session_lists import load_dual_nhp_configs
-from bos_mua.viz_lr import (
+from bos_mua.viz.lr import (
     build_session_lr_suptitle,
     format_task_evoked_p,
     load_smoothed_lr_trials,
