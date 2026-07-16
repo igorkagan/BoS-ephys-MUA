@@ -1,33 +1,33 @@
 session_id,session_pair,dataset,problem,n_Dyadic,n_SemiSolo,n_SoloA,n_SoloARewardAB,n_SoloB,n_SoloBRewardAB
 20230330T133602,A_Curius.B_AE,Curius_BLOCKED_CONF,-,320,-,469,-,-,-
-20230331T131059,A_Curius.B_AE,Curius_BLOCKED_CONF,A_Reward_list absent from trialinfo.4python.mat,-,-,-,-,-,-
-20230404T150951,A_Curius.B_AE,Curius_BLOCKED_CONF,A_Reward_list absent from trialinfo.4python.mat,-,-,-,-,-,-
-20230405T145014,A_Curius.B_AE,Curius_BLOCKED_CONF,A_Reward_list absent from trialinfo.4python.mat,-,-,-,-,-,-
+20230331T131059,A_Curius.B_AE,Curius_BLOCKED_CONF,-,314,-,305,-,-,-
+20230404T150951,A_Curius.B_AE,Curius_BLOCKED_CONF,-,420,-,239,-,-,-
+20230405T145014,A_Curius.B_AE,Curius_BLOCKED_CONF,-,468,-,224,-,-,-
 20230412T143018,A_Curius.B_AE,Curius_BLOCKED_CONF,-,346,-,151,-,-,-
-20230413T142422,A_Curius.B_AE,Curius_BLOCKED_CONF,A_Reward_list absent from trialinfo.4python.mat,-,-,-,-,-,-
+20230413T142422,A_Curius.B_AE,Curius_BLOCKED_CONF,-,401,-,126,-,-,-
 20230504T131733,A_Curius.B_AE,Curius_BLOCKED_CONF,-,520,-,167,-,-,-
 20230505T123505,A_Curius.B_AE,Curius_BLOCKED_CONF,-,600,-,174,-,-,-
 20230509T130346,A_Curius.B_SM,Curius_BLOCKED_CONF,-,386,-,275,-,-,-
-20230510T144106,A_Curius.B_SM,Curius_BLOCKED_CONF,A_Reward_list absent from trialinfo.4python.mat,-,-,-,-,-,-
+20230510T144106,A_Curius.B_SM,Curius_BLOCKED_CONF,-,520,-,348,-,-,-
 20230511T142916,A_Curius.B_SM,Curius_BLOCKED_CONF,-,406,-,88,-,-,-
-20230512T125943,A_Curius.B_SM,Curius_BLOCKED_CONF,A_Reward_list absent from trialinfo.4python.mat,-,-,-,-,-,-
-20230516T133503,A_Curius.B_RB,Curius_BLOCKED_CONF,A_Reward_list absent from trialinfo.4python.mat,-,-,-,-,-,-
+20230512T125943,A_Curius.B_SM,Curius_BLOCKED_CONF,-,442,-,215,-,-,-
+20230516T133503,A_Curius.B_RB,Curius_BLOCKED_CONF,-,324,-,182,-,-,-
 20230517T130621,A_Curius.B_RB,Curius_BLOCKED_CONF,-,370,-,221,-,-,-
 20230518T135808,A_Curius.B_SM,Curius_BLOCKED_CONF,-,563,-,130,-,-,-
 20230523T145755,A_Curius.B_SM,Curius_BLOCKED_CONF,-,402,-,136,-,-,-
-20230525T103049,A_Curius.B_SM,Curius_BLOCKED_CONF,-,243,-,149,-,-,-
+20230525T103049,A_Curius.B_SM,Curius_BLOCKED_CONF,-,252,-,149,-,-,-
 20230620T101238,A_Curius.B_VC,Curius_BLOCKED_CONF,-,413,-,101,-,-,-
 20230621T100721,A_Curius.B_MK,Curius_BLOCKED_CONF,-,533,-,118,-,-,-
 20230622T111856,A_Curius.B_SM,Curius_BLOCKED_CONF,-,461,-,152,-,-,-
 20230628T101631,A_Curius.B_VC,Curius_BLOCKED_CONF,-,455,-,35,-,-,-
 20230703T122644,A_Curius.B_MK,Curius_BLOCKED_CONF,-,542,-,195,-,-,-
 20230607T115959,A_Curius.B_VC,Curius_SHUFFLED_CONF,-,405,-,255,-,-,-
-20230608T102315,A_Curius.B_VC,Curius_SHUFFLED_CONF,A_Reward_list absent from trialinfo.4python.mat,-,-,-,-,-,-
+20230608T102315,A_Curius.B_VC,Curius_SHUFFLED_CONF,-,498,-,224,-,-,-
 20230609T101610,A_Curius.B_VC,Curius_SHUFFLED_CONF,-,313,-,206,-,-,-
-20230613T104336,A_Curius.B_VC,Curius_SHUFFLED_CONF,A_Reward_list absent from trialinfo.4python.mat,-,-,-,-,-,-
+20230613T104336,A_Curius.B_VC,Curius_SHUFFLED_CONF,-,367,-,193,-,-,-
 20230614T114327,A_Curius.B_VC,Curius_SHUFFLED_CONF,-,531,-,342,-,-,-
-20230615T122340,A_Curius.B_VC,Curius_SHUFFLED_CONF,A_Reward_list absent from trialinfo.4python.mat; B_Reward_list absent from trialinfo.4python.mat,-,-,-,-,-,-
-20230616T094811,A_Curius.B_VC,Curius_SHUFFLED_CONF,-,300,-,-,-,-,260
+20230615T122340,A_Curius.B_VC,Curius_SHUFFLED_CONF,-,355,-,338,-,-,-
+20230616T094811,A_Curius.B_VC,Curius_SHUFFLED_CONF,-,300,-,-,-,-,-
 20230619T102732,A_Curius.B_VC,Curius_SHUFFLED_CONF,-,326,-,119,-,-,-
 20230620T101238,A_Curius.B_VC,Curius_SHUFFLED_CONF,-,413,-,101,-,-,-
 20230621T100721,A_Curius.B_MK,Curius_SHUFFLED_CONF,-,533,-,118,-,-,-
@@ -36,56 +36,56 @@ session_id,session_pair,dataset,problem,n_Dyadic,n_SemiSolo,n_SoloA,n_SoloARewar
 20230628T101631,A_Curius.B_VC,Curius_SHUFFLED_CONF,-,455,-,35,-,-,-
 20230629T100435,A_Curius.B_VC,Curius_SHUFFLED_CONF,-,399,-,294,-,-,-
 20230703T122644,A_Curius.B_MK,Curius_SHUFFLED_CONF,-,542,-,195,-,-,-
-20201204T125624,A_Elmo.B_FS,Elmo_BLOCKED_CONF,B_Reward_list absent from trialinfo.4python.mat,-,-,-,-,-,-
-20201208T125551,A_Elmo.B_FS,Elmo_BLOCKED_CONF,B_Reward_list absent from trialinfo.4python.mat,-,-,-,-,-,-
-20201209T131446,A_Elmo.B_FS,Elmo_BLOCKED_CONF,B_Reward_list absent from trialinfo.4python.mat,-,-,-,-,-,-
-20201211T104906,A_Elmo.B_FS,Elmo_BLOCKED_CONF,B_Reward_list absent from trialinfo.4python.mat,-,-,-,-,-,-
-20201215T110936,A_Elmo.B_FS,Elmo_BLOCKED_CONF,B_Reward_list absent from trialinfo.4python.mat,-,-,-,-,-,-
-20201216T114911,A_Elmo.B_FS,Elmo_BLOCKED_CONF,B_Reward_list absent from trialinfo.4python.mat,-,-,-,-,-,-
-20201217T135022,A_Elmo.B_FS,Elmo_BLOCKED_CONF,B_Reward_list absent from trialinfo.4python.mat,-,-,-,-,-,-
-20201218T130348,A_Elmo.B_FS,Elmo_BLOCKED_CONF,-,240,-,65,-,-,240
-20210119T110839,A_Elmo.B_FS,Elmo_BLOCKED_CONF,session dir missing,-,-,-,-,-,-
-20210120T112418,A_Elmo.B_FS,Elmo_BLOCKED_CONF,session dir missing,-,-,-,-,-,-
-20210121T115414,A_Elmo.B_FS,Elmo_BLOCKED_CONF,session dir missing,-,-,-,-,-,-
-20210122T125644,A_Elmo.B_FS,Elmo_BLOCKED_CONF,session dir missing,-,-,-,-,-,-
-20210126T132146,A_Elmo.B_FS,Elmo_BLOCKED_CONF,session dir missing,-,-,-,-,-,-
-20210127T130717,A_Elmo.B_FS,Elmo_BLOCKED_CONF,B_Reward_list absent from trialinfo.4python.mat; A_Reward_list absent from trialinfo.4python.mat,-,-,-,-,-,-
-20210129T150949,A_Elmo.B_FS,Elmo_BLOCKED_CONF,-,239,-,116,-,-,-
-20210318T131335,A_Elmo.B_FS,Elmo_BLOCKED_CONF,B_Reward_list absent from trialinfo.4python.mat; A_Reward_list absent from trialinfo.4python.mat,-,-,-,-,-,-
-20210319T132345,A_Elmo.B_FS,Elmo_BLOCKED_CONF,B_Reward_list absent from trialinfo.4python.mat; A_Reward_list absent from trialinfo.4python.mat,-,-,-,-,-,-
-20210331T130804,A_Elmo.B_KN,Elmo_BLOCKED_CONF,B_Reward_list absent from trialinfo.4python.mat; A_Reward_list absent from trialinfo.4python.mat,-,-,-,-,-,-
-20210401T124246,A_Elmo.B_KN,Elmo_BLOCKED_CONF,-,300,220,137,-,-,-
-20210415T112453,A_Elmo.B_KN,Elmo_BLOCKED_CONF,B_Reward_list absent from trialinfo.4python.mat; A_Reward_list absent from trialinfo.4python.mat,-,-,-,-,-,-
-20210416T105525,A_Elmo.B_KN,Elmo_BLOCKED_CONF,-,259,281,130,-,-,-
-20210421T105506,A_Elmo.B_KN,Elmo_BLOCKED_CONF,B_Reward_list absent from trialinfo.4python.mat; A_Reward_list absent from trialinfo.4python.mat,-,-,-,-,-,-
-20210422T131844,A_Elmo.B_KN,Elmo_BLOCKED_CONF,B_Reward_list absent from trialinfo.4python.mat; A_Reward_list absent from trialinfo.4python.mat,-,-,-,-,-,-
-20210423T105645,A_Elmo.B_KN,Elmo_BLOCKED_CONF,-,300,300,174,-,-,-
-20210519T112804,A_Elmo.B_KN,Elmo_BLOCKED_CONF,session dir missing,-,-,-,-,-,-
-20210520T120659,A_Elmo.B_KN,Elmo_BLOCKED_CONF,B_Reward_list absent from trialinfo.4python.mat; A_Reward_list absent from trialinfo.4python.mat,-,-,-,-,-,-
-20210521T102025,A_Elmo.B_KN,Elmo_BLOCKED_CONF,B_Reward_list absent from trialinfo.4python.mat; A_Reward_list absent from trialinfo.4python.mat,-,-,-,-,-,-
-20210604T143542,A_Elmo.B_KN,Elmo_BLOCKED_CONF,-,260,240,144,-,-,-
-20210608T131158,A_Elmo.B_KN,Elmo_BLOCKED_CONF,-,240,239,166,-,-,-
-20210616T124854,A_Elmo.B_ST,Elmo_BLOCKED_CONF,suspicious: 269 SemiSolo trials but 0 rewarded (check RA/RB labels),260,0,324,-,-,-
-20210617T125407,A_Elmo.B_ST,Elmo_BLOCKED_CONF,B_Reward_list absent from trialinfo.4python.mat; A_Reward_list absent from trialinfo.4python.mat,-,-,-,-,-,-
-20210624T130705,A_Elmo.B_KN,Elmo_BLOCKED_CONF,B_Reward_list absent from trialinfo.4python.mat; A_Reward_list absent from trialinfo.4python.mat,-,-,-,-,-,-
-20210707T125533,A_Elmo.B_ST,Elmo_BLOCKED_CONF,B_Reward_list absent from trialinfo.4python.mat; A_Reward_list absent from trialinfo.4python.mat,-,-,-,-,-,-
-20210708T131736,A_Elmo.B_KN,Elmo_BLOCKED_CONF,-,480,-,377,-,-,-
+20201204T125624,A_Elmo.B_FS,Elmo_BLOCKED_CONF,-,362,-,-,-,-,-
+20201208T125551,A_Elmo.B_FS,Elmo_BLOCKED_CONF,-,370,-,-,-,-,-
+20201209T131446,A_Elmo.B_FS,Elmo_BLOCKED_CONF,-,372,-,-,-,-,-
+20201211T104906,A_Elmo.B_FS,Elmo_BLOCKED_CONF,-,360,-,-,-,-,-
+20201215T110936,A_Elmo.B_FS,Elmo_BLOCKED_CONF,-,360,-,-,-,-,-
+20201216T114911,A_Elmo.B_FS,Elmo_BLOCKED_CONF,-,480,-,-,-,-,-
+20201217T135022,A_Elmo.B_FS,Elmo_BLOCKED_CONF,-,413,-,-,-,-,-
+20201218T130348,A_Elmo.B_FS,Elmo_BLOCKED_CONF,-,244,-,-,-,-,-
+20210119T110839,A_Elmo.B_FS,Elmo_BLOCKED_CONF,-,200,-,-,-,-,-
+20210120T112418,A_Elmo.B_FS,Elmo_BLOCKED_CONF,-,208,-,-,-,-,-
+20210121T115414,A_Elmo.B_FS,Elmo_BLOCKED_CONF,-,397,-,-,-,-,-
+20210122T125644,A_Elmo.B_FS,Elmo_BLOCKED_CONF,-,439,-,-,-,-,-
+20210126T132146,A_Elmo.B_FS,Elmo_BLOCKED_CONF,-,560,-,-,-,-,-
+20210127T130717,A_Elmo.B_FS,Elmo_BLOCKED_CONF,-,272,-,-,-,-,-
+20210129T150949,A_Elmo.B_FS,Elmo_BLOCKED_CONF,-,239,-,-,-,-,-
+20210318T131335,A_Elmo.B_FS,Elmo_BLOCKED_CONF,-,480,-,-,-,-,-
+20210319T132345,A_Elmo.B_FS,Elmo_BLOCKED_CONF,-,300,-,-,-,-,-
+20210331T130804,A_Elmo.B_KN,Elmo_BLOCKED_CONF,-,540,-,-,-,-,-
+20210401T124246,A_Elmo.B_KN,Elmo_BLOCKED_CONF,-,520,-,-,-,-,-
+20210415T112453,A_Elmo.B_KN,Elmo_BLOCKED_CONF,-,520,-,-,-,-,-
+20210416T105525,A_Elmo.B_KN,Elmo_BLOCKED_CONF,-,540,-,-,-,-,-
+20210421T105506,A_Elmo.B_KN,Elmo_BLOCKED_CONF,-,600,-,-,-,-,-
+20210422T131844,A_Elmo.B_KN,Elmo_BLOCKED_CONF,-,600,-,-,-,-,-
+20210423T105645,A_Elmo.B_KN,Elmo_BLOCKED_CONF,-,600,-,-,-,-,-
+20210519T112804,A_Elmo.B_KN,Elmo_BLOCKED_CONF,-,439,-,-,-,-,-
+20210520T120659,A_Elmo.B_KN,Elmo_BLOCKED_CONF,-,520,-,-,-,-,-
+20210521T102025,A_Elmo.B_KN,Elmo_BLOCKED_CONF,-,520,-,-,-,-,-
+20210604T143542,A_Elmo.B_KN,Elmo_BLOCKED_CONF,-,500,-,-,-,-,-
+20210608T131158,A_Elmo.B_KN,Elmo_BLOCKED_CONF,-,479,-,-,-,-,-
+20210616T124854,A_Elmo.B_ST,Elmo_BLOCKED_CONF,-,260,-,324,-,-,-
+20210617T125407,A_Elmo.B_ST,Elmo_BLOCKED_CONF,-,481,-,-,-,-,-
+20210624T130705,A_Elmo.B_KN,Elmo_BLOCKED_CONF,-,415,-,-,-,-,-
+20210707T125533,A_Elmo.B_ST,Elmo_BLOCKED_CONF,-,480,-,-,-,-,-
+20210708T131736,A_Elmo.B_KN,Elmo_BLOCKED_CONF,-,480,-,-,-,-,-
 20210709T103307,A_Elmo.B_ST,Elmo_BLOCKED_CONF,-,480,-,267,-,-,-
 20210715T105108,A_Elmo.B_ST,Elmo_BLOCKED_CONF,-,480,-,42,-,-,-
 20210716T103652,A_Elmo.B_KN,Elmo_BLOCKED_CONF,-,480,-,41,-,-,-
 20210828T135335,A_Elmo.B_KN,Elmo_BLOCKED_CONF,-,313,-,-,-,-,-
-20230628T144009,A_MK.B_Elmo,Elmo_BLOCKED_CONF,B_Reward_list absent from trialinfo.4python.mat; A_Reward_list absent from trialinfo.4python.mat,-,-,-,-,-,-
-20230629T152509,A_MK.B_Elmo,Elmo_BLOCKED_CONF,B_Reward_list absent from trialinfo.4python.mat; A_Reward_list absent from trialinfo.4python.mat,-,-,-,-,-,-
-20210202T154700,A_Elmo.B_DL,Elmo_SHUFFLED_CONF,B_Reward_list absent from trialinfo.4python.mat; A_Reward_list absent from trialinfo.4python.mat,-,-,-,-,-,-
-20210203T151622,A_Elmo.B_DL,Elmo_SHUFFLED_CONF,session dir missing,-,-,-,-,-,-
-20210204T131620,A_Elmo.B_DL,Elmo_SHUFFLED_CONF,-,569,-,52,-,-,-
-20210205T151709,A_Elmo.B_DL,Elmo_SHUFFLED_CONF,-,551,-,147,-,-,-
-20210211T163501,A_Elmo.B_DL,Elmo_SHUFFLED_CONF,-,482,-,25,-,-,-
-20210212T153711,A_Elmo.B_DL,Elmo_SHUFFLED_CONF,-,240,-,3,-,-,-
-20210218T131636,A_Elmo.B_FS,Elmo_SHUFFLED_CONF,B_Reward_list absent from trialinfo.4python.mat; A_Reward_list absent from trialinfo.4python.mat,-,-,-,-,-,-
-20210219T145809,A_Elmo.B_DL,Elmo_SHUFFLED_CONF,-,480,-,235,-,-,-
-20210610T132106,A_Elmo.B_ST,Elmo_SHUFFLED_CONF,-,201,125,69,-,-,-
-20210611T135443,A_Elmo.B_KN,Elmo_SHUFFLED_CONF,-,200,72,3,-,-,-
-20210618T123111,A_Elmo.B_ST,Elmo_SHUFFLED_CONF,-,240,241,190,-,-,-
-20210623T140144,A_Elmo.B_ST,Elmo_SHUFFLED_CONF,-,240,240,173,-,-,-
-20210625T141512,A_Elmo.B_KN,Elmo_SHUFFLED_CONF,-,240,202,26,-,-,-
+20230628T144009,A_MK.B_Elmo,Elmo_BLOCKED_CONF,-,240,-,-,-,-,-
+20230629T152509,A_MK.B_Elmo,Elmo_BLOCKED_CONF,-,243,-,-,-,-,-
+20210202T154700,A_Elmo.B_DL,Elmo_SHUFFLED_CONF,-,322,-,-,-,-,-
+20210203T151622,A_Elmo.B_DL,Elmo_SHUFFLED_CONF,-,594,-,-,-,-,-
+20210204T131620,A_Elmo.B_DL,Elmo_SHUFFLED_CONF,-,569,-,-,-,-,-
+20210205T151709,A_Elmo.B_DL,Elmo_SHUFFLED_CONF,-,551,-,-,-,-,-
+20210211T163501,A_Elmo.B_DL,Elmo_SHUFFLED_CONF,-,482,-,-,-,-,-
+20210212T153711,A_Elmo.B_DL,Elmo_SHUFFLED_CONF,-,240,-,-,-,-,-
+20210218T131636,A_Elmo.B_FS,Elmo_SHUFFLED_CONF,-,480,-,-,-,-,-
+20210219T145809,A_Elmo.B_DL,Elmo_SHUFFLED_CONF,-,480,-,-,-,-,-
+20210610T132106,A_Elmo.B_ST,Elmo_SHUFFLED_CONF,-,326,-,-,-,-,-
+20210611T135443,A_Elmo.B_KN,Elmo_SHUFFLED_CONF,-,272,-,-,-,-,-
+20210618T123111,A_Elmo.B_ST,Elmo_SHUFFLED_CONF,-,481,-,-,-,-,-
+20210623T140144,A_Elmo.B_ST,Elmo_SHUFFLED_CONF,-,480,-,-,-,-,-
+20210625T141512,A_Elmo.B_KN,Elmo_SHUFFLED_CONF,-,442,-,-,-,-,-
