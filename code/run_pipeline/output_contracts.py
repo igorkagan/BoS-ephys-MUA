@@ -93,9 +93,11 @@ def expected_branch_outputs(
             expected.extend(root / f"delta_consensus_{name}.pdf" for name in ARRAY_NAMES)
 
     z_summaries = cache.summaries.get(True, [])
+    sessions_with_summaries = len(_summary_sessions(z_summaries))
     if (
         "stability_across_sessions" in steps
         and len(ctx.session_ids) >= stability_step.MIN_SESSIONS
+        and sessions_with_summaries >= stability_step.MIN_SESSIONS
         and z_summaries
     ):
         root = _mode_root(ctx, True) / "stability_across_sessions"

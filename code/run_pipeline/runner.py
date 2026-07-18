@@ -235,10 +235,17 @@ def run_pipeline_steps(
         print("STEP: stability_across_sessions")
         print("=" * 72)
         summaries = sas.summaries_for_run(ctx, active.summaries)
+        sessions_with_summaries = len({s.session_id for s in summaries})
         if len(session_ids) < sas.MIN_SESSIONS:
             warnings.warn(
                 f"Skipping stability_across_sessions for {ctx.condition_label}: "
                 f"need >={sas.MIN_SESSIONS} sessions, found {len(session_ids)}"
+            )
+        elif sessions_with_summaries < sas.MIN_SESSIONS:
+            warnings.warn(
+                f"Skipping stability_across_sessions for {ctx.condition_label}: "
+                f"need >={sas.MIN_SESSIONS} sessions with summaries, "
+                f"found {sessions_with_summaries}"
             )
         elif not summaries:
             warnings.warn(
