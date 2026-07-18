@@ -1,7 +1,6 @@
 % This is root for all session lists
 % root_folder = 'S:\taskcontroller\SCP_DATA\SCP-CTRL-01\MUA_export_per_session';
 root_folder = '/home/igor/snd/taskcontroller/SCP_DATA/SCP-CTRL-01/MUA_export_per_session';
-output_folder = fullfile(root_folder, 'DUAL_NHP');
 
 
 DUAL_NHP = {...
