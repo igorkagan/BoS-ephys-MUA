@@ -207,6 +207,54 @@ mua_sel = mua[blocked_dyadic_rewarded_monkeyfirst & row_ok]
 5. Load `x_vector_ms` once per alignment event (shared across channels).
 6. Apply the same trial mask to every channel's `cur_output_data` so trial indices stay aligned across channels.
 
+## Ubuntu 20.04 (Python environment)
+
+Ubuntu 20.04 ships **Python 3.8** as `/usr/bin/python3`. That is too old for this repo (CI tests **3.12+**; some code uses 3.10+ syntax such as `zip(..., strict=True)`). **Do not replace or remove the system Python** — apt and OS tools depend on it.
+
+Recommended setup on lab machines: install **Miniforge** in your home directory and use a dedicated conda env. No `sudo` required; system Python stays untouched.
+
+### One-time install
+
+```bash
+cd /tmp
+curl -fsSL -o Miniforge3-Linux-x86_64.sh \
+  https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh
+bash Miniforge3-Linux-x86_64.sh -b -p ~/miniforge3
+~/miniforge3/bin/conda init bash
+# open a new shell, then:
+conda activate base
+mamba create -y -n bos-ephys python=3.12 numpy scipy matplotlib plotly
+```
+
+Alternatively, after creating the env:
+
+```bash
+conda activate bos-ephys
+pip install -r requirements.txt
+```
+
+### Run the pipeline
+
+From the repo root, always use the conda env (not `/usr/bin/python3`):
+
+```bash
+cd ~/Documents/GitHub/BoS-ephys-MUA
+conda activate bos-ephys
+PYTHONPATH=code python -u code/run_scripts/run_curated.py Elmo_BLOCKED
+PYTHONPATH=code python -u code/run_scripts/run_session_list.py Elmo_BLOCKED_CONF
+```
+
+Verify:
+
+```bash
+python --version          # Python 3.12.x
+python -c "import numpy, scipy, matplotlib, plotly"
+```
+
+### SMB/CIFS note
+
+If `root_folder` in [`session_lists.m`](session_lists.m) points at a mounted share (e.g. `~/snd/...`), matplotlib can fail with `OSError: [Errno 16] Device or resource busy` when overwriting an existing PDF. Close any PDF viewer on those files, or delete the partial output subfolder before rerunning a failed step.
+
 ## Repository layout
 
 All Python code lives under **`code/`**. Runnable entry points are in **`code/run_scripts/`**. Run from the repo root:

@@ -198,7 +198,9 @@ def plot_si_stability_by_array(
     positions = []
     plot_data = []
     tick_labels = []
-    for pos, (ch_num, col) in enumerate(zip(ch_nums, ch_cols, strict=True), start=1):
+    if len(ch_nums) != len(ch_cols):
+        raise ValueError(f"ch_nums/ch_cols length mismatch: {len(ch_nums)} vs {len(ch_cols)}")
+    for pos, (ch_num, col) in enumerate(zip(ch_nums, ch_cols), start=1):
         vals = si_matrix[:, col]
         finite = vals[np.isfinite(vals)]
         tick_labels.append(f"{ch_num}")
