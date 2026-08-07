@@ -170,7 +170,13 @@ def window_indices(t_ms: np.ndarray, window_ms: tuple[float, float]) -> np.ndarr
     return np.flatnonzero((t_ms >= lo) & (t_ms <= hi))
 
 
-def gaussian_smooth_trials(trials: np.ndarray, t_ms: np.ndarray, smooth_ms: float) -> np.ndarray:
+def gaussian_smooth_trials(
+    trials: np.ndarray,
+    t_ms: np.ndarray,
+    smooth_ms: float,
+    *,
+    mode: str = "reflect",
+) -> np.ndarray:
     if trials.size == 0 or smooth_ms <= 0:
         return trials
 
@@ -179,7 +185,9 @@ def gaussian_smooth_trials(trials: np.ndarray, t_ms: np.ndarray, smooth_ms: floa
     out = trials.copy()
     valid = ~np.all(np.isnan(trials), axis=1)
     if np.any(valid):
-        out[valid] = gaussian_filter1d(trials[valid], sigma=sigma_samples, axis=1, mode="nearest")
+        out[valid] = gaussian_filter1d(
+            trials[valid], sigma=sigma_samples, axis=1, mode=mode,
+        )
     return out
 
 
