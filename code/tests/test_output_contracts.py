@@ -114,6 +114,19 @@ class OutputManifestTests(unittest.TestCase):
                 names,
             )
 
+    def test_pref_unpref_expected_combined_pref_pdfs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            ctx, cache = self._fixture(Path(tmp))
+            expected = expected_branch_outputs(ctx, ["pref_unpref"], cache)
+            names = {path.name for path in expected}
+            self.assertEqual(sum(name.endswith("_combined_pref.pdf") for name in names), 6)
+            self.assertIn(
+                "Elmo_AgoB_A_InitialFixationReleaseTime_ms_arrays_combined_pref.pdf",
+                names,
+            )
+            self.assertFalse(any("pref_unpref" in path.as_posix() for path in expected))
+            self.assertTrue(all("combined" in path.as_posix() for path in expected))
+
     def test_validation_writes_recheckable_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             ctx, cache = self._fixture(Path(tmp))

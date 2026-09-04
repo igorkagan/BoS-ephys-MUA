@@ -3,7 +3,7 @@ median_delta_si: -0.039911365315555614
 mean_delta_si: -0.1207921172087606
 iqr_delta_si: 0.5182695309343217
 wilcoxon_p: 3.678192666966719e-14
-sign_test_p: 8.63920659273344e-10
+sign_test_p: 8.639206592733285e-10
 n_delta_pos: 536
 n_delta_neg: 757
 n_delta_zero: 79

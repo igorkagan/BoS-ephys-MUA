@@ -246,6 +246,7 @@ def run_choice_ab_grid(
     max_sessions: int | None = None,
     nshuffles: int | None = None,
     cross_validations: int | None = None,
+    session_parent: str | None = None,
 ) -> Path:
     root = data_root or default_curated_data_root()
     figs = figures_root or FIGURES_ROOT
@@ -298,6 +299,7 @@ def run_choice_ab_grid(
                     bin_step_ms=BIN_STEP_MS,
                     smooth_ms=GAUSSIAN_SMOOTH_MS,
                     zscore_mua=ZSCORE_MUA,
+                    session_parent=session_parent,
                 )
                 _fill_choice_ab_panels(
                     panels,
@@ -440,6 +442,7 @@ def run_same_diff_grid(
     max_sessions: int | None = None,
     nshuffles: int | None = None,
     cross_validations: int | None = None,
+    session_parent: str | None = None,
 ) -> Path:
     root = data_root or default_curated_data_root()
     figs = figures_root or FIGURES_ROOT
@@ -484,6 +487,7 @@ def run_same_diff_grid(
                     trial_type="Dyadic",
                     data_root=root,
                     alignment_event=event,
+                    session_parent=session_parent,
                 )
                 sess = subset_for_conditions(
                     bundle, {"same_diff": ["same", "diff"]}, count_key="same_diff",
@@ -570,23 +574,28 @@ def run_dyadic_all_grids(
     max_sessions: int | None = None,
     nshuffles: int | None = None,
     cross_validations: int | None = None,
+    session_ids: list[str] | None = None,
+    session_parent: str | None = None,
 ) -> None:
     for go_seq in go_seqs:
         run_choice_ab_grid(
             condition, go_seq, balanced=False,
             data_root=data_root, figures_root=figures_root,
+            session_ids=session_ids, session_parent=session_parent,
             force=force, max_sessions=max_sessions,
             nshuffles=nshuffles, cross_validations=cross_validations,
         )
         run_choice_ab_grid(
             condition, go_seq, balanced=True,
             data_root=data_root, figures_root=figures_root,
+            session_ids=session_ids, session_parent=session_parent,
             force=force, max_sessions=max_sessions,
             nshuffles=nshuffles, cross_validations=cross_validations,
         )
         run_same_diff_grid(
             condition, go_seq,
             data_root=data_root, figures_root=figures_root,
+            session_ids=session_ids, session_parent=session_parent,
             force=force, max_sessions=max_sessions,
             nshuffles=nshuffles, cross_validations=cross_validations,
         )

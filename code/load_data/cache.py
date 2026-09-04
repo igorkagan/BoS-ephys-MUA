@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import gc
 import warnings
+import zipfile
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from io import BytesIO
 from pathlib import Path
 
 import numpy as np
@@ -27,6 +31,19 @@ from analyze_stability import combine as cs
 from analyze_stability import consistency as acc
 
 INVALID_LABELS = frozenset({"NONE", "None", "none", ""})
+# Trial PSTHs are stored/spilled as float32: halves RAM vs float64, enough for plots.
+TRIAL_DTYPE = np.float32
+
+
+def trim_allocator() -> None:
+    """Return freed pages to the OS after dropping large arrays (Linux/glibc)."""
+    gc.collect()
+    try:
+        import ctypes
+
+        ctypes.CDLL("libc.so.6").malloc_trim(0)
+    except (OSError, AttributeError):
+        pass
 
 
 @dataclass
@@ -132,6 +149,8 @@ class RunDataCache:
         self,
         steps: list[str],
         branch_specs: list[TrialBranchSpec] | None = None,
+        *,
+        on_session: Callable[[str], None] | None = None,
     ) -> None:
         modes = self._modes_for_steps(steps)
         if not modes:
@@ -142,6 +161,7 @@ class RunDataCache:
                 TrialBranchSpec("dyadic", "", dict(self.ctx.trial_filters)),
             ]
         self.branch_specs = list(branch_specs)
+        need_pooled = "combine" in steps or "array_combined" in steps
 
         for spec in branch_specs:
             state = BranchState()
@@ -152,12 +172,12 @@ class RunDataCache:
 
         for session_id in self.session_ids:
             self._load_session(session_id, modes, branch_specs)
-
-        if "combine" in steps or "array_combined" in steps:
-            for spec in branch_specs:
-                self.branches[spec.name].pooled = self._build_pooled(
-                    spec.name, True,
-                )
+            if on_session is not None:
+                on_session(session_id)
+            if need_pooled:
+                self._spill_session_trials(session_id)
+            self._drop_session_trials(session_id)
+            trim_allocator()
 
     def _modes_for_steps(self, steps: list[str]) -> tuple[bool, ...]:
         modes: set[bool] = set()
@@ -253,7 +273,8 @@ class RunDataCache:
                     if result is not None:
                         state.summaries[False].append(result.summary)
                         state.trials[False].setdefault(session_id, {})[ch_num] = (
-                            result.left_trials, result.right_trials,
+                            np.asarray(result.left_trials, dtype=TRIAL_DTYPE),
+                            np.asarray(result.right_trials, dtype=TRIAL_DTYPE),
                         )
                         session_counts[spec.name][False] += 1
 
@@ -262,7 +283,8 @@ class RunDataCache:
                     if result is not None:
                         state.summaries[True].append(result.summary)
                         state.trials[True].setdefault(session_id, {})[ch_num] = (
-                            result.left_trials, result.right_trials,
+                            np.asarray(result.left_trials, dtype=TRIAL_DTYPE),
+                            np.asarray(result.right_trials, dtype=TRIAL_DTYPE),
                         )
                         session_counts[spec.name][True] += 1
 
@@ -291,11 +313,76 @@ class RunDataCache:
         self.loadmat_calls += 1
         return loadmat(ch_path)["cur_output_data"]
 
-    def _build_pooled(self, branch_name: str, zscore_mua: bool) -> PooledTrialData:
-        if self.t_ms is None or self.win_idx is None:
-            raise ValueError(f"No usable sessions for {self.ctx.condition_label}")
+    def _spec_for(self, branch_name: str) -> TrialBranchSpec:
+        for spec in self.branch_specs:
+            if spec.name == branch_name:
+                return spec
+        raise KeyError(f"Unknown branch {branch_name!r}")
 
+    def _branch_output_base(self, spec: TrialBranchSpec) -> Path:
+        if spec.output_subdir:
+            return self.ctx.output_base / spec.output_subdir
+        return self.ctx.output_base
+
+    def _session_trials_path(
+        self, spec: TrialBranchSpec, session_id: str, zscore_mua: bool,
+    ) -> Path:
+        tag = "zscore" if zscore_mua else "raw"
+        return (
+            disk_cache_dir(self._branch_output_base(spec), self.ctx.condition_label)
+            / "session_trials"
+            / f"{session_id}_{tag}.npz"
+        )
+
+    def _drop_session_trials(self, session_id: str) -> None:
+        for state in self.branches.values():
+            for zscore_mua in list(state.trials):
+                state.trials[zscore_mua].pop(session_id, None)
+
+    def _spill_session_trials(self, session_id: str) -> None:
+        for spec in self.branch_specs:
+            state = self.branches[spec.name]
+            for zscore_mua, sessions in state.trials.items():
+                ch_map = sessions.get(session_id)
+                if not ch_map:
+                    continue
+                path = self._session_trials_path(spec, session_id, zscore_mua)
+                path.parent.mkdir(parents=True, exist_ok=True)
+                payload: dict[str, np.ndarray] = {
+                    "channels": np.asarray(sorted(ch_map), dtype=np.int32),
+                }
+                for ch_num, (left_trials, right_trials) in ch_map.items():
+                    payload[f"L_{ch_num}"] = np.asarray(left_trials, dtype=TRIAL_DTYPE)
+                    payload[f"R_{ch_num}"] = np.asarray(right_trials, dtype=TRIAL_DTYPE)
+                np.savez(path, **payload)
+
+    def _load_spilled_session(
+        self, spec: TrialBranchSpec, session_id: str, zscore_mua: bool,
+    ) -> dict[int, tuple[np.ndarray, np.ndarray]]:
+        path = self._session_trials_path(spec, session_id, zscore_mua)
+        if not path.exists():
+            return {}
+        with np.load(path, allow_pickle=False) as data:
+            channels = [int(ch) for ch in np.asarray(data["channels"]).tolist()]
+            return {
+                ch: (
+                    np.asarray(data[f"L_{ch}"], dtype=TRIAL_DTYPE),
+                    np.asarray(data[f"R_{ch}"], dtype=TRIAL_DTYPE),
+                )
+                for ch in channels
+                if f"L_{ch}" in data.files and f"R_{ch}" in data.files
+            }
+
+    def ensure_pooled(
+        self, branch_name: str, zscore_mua: bool = True,
+    ) -> PooledTrialData | None:
+        """Build pooled traces for one branch from spilled session files (or RAM)."""
         state = self.branch(branch_name)
+        if state.pooled is not None:
+            return state.pooled
+        if self.t_ms is None or self.win_idx is None:
+            return None
+        spec = self._spec_for(branch_name)
         left_by_ch: dict[int, list[np.ndarray]] = defaultdict(list)
         right_by_ch: dict[int, list[np.ndarray]] = defaultdict(list)
         sess_left_by_ch: dict[int, list[float]] = defaultdict(list)
@@ -303,13 +390,14 @@ class RunDataCache:
 
         session_trials = state.trials.get(zscore_mua, {})
         for session_id in self.session_ids:
-            ch_trials = session_trials.get(session_id, {})
+            ch_trials = session_trials.get(session_id)
+            if not ch_trials:
+                ch_trials = self._load_spilled_session(spec, session_id, zscore_mua)
             for ch_num, (left_trials, right_trials) in ch_trials.items():
                 if left_trials.size:
                     left_by_ch[ch_num].append(left_trials)
                 if right_trials.size:
                     right_by_ch[ch_num].append(right_trials)
-
                 left_rates = trial_window_means(left_trials, self.win_idx)
                 right_rates = trial_window_means(right_trials, self.win_idx)
                 n_left = int(np.sum(~np.isnan(left_rates))) if left_rates.size else 0
@@ -318,7 +406,9 @@ class RunDataCache:
                     sess_left_by_ch[ch_num].append(float(np.nanmean(left_rates)))
                     sess_right_by_ch[ch_num].append(float(np.nanmean(right_rates)))
 
-        return PooledTrialData(
+        if not left_by_ch and not right_by_ch:
+            return None
+        state.pooled = PooledTrialData(
             t_ms=self.t_ms,
             win_idx=self.win_idx,
             left_by_ch=dict(left_by_ch),
@@ -326,6 +416,20 @@ class RunDataCache:
             sess_left_by_ch=dict(sess_left_by_ch),
             sess_right_by_ch=dict(sess_right_by_ch),
         )
+        return state.pooled
+
+    def release_branch(self, branch_name: str) -> None:
+        """Drop trial/pooled arrays for one branch and return pages to the OS."""
+        state = self.branch(branch_name)
+        spec = self._spec_for(branch_name)
+        state.trials = {zscore_mua: {} for zscore_mua in state.trials}
+        state.pooled = None
+        state.summaries = {zscore_mua: [] for zscore_mua in state.summaries}
+        spill_dir = self._session_trials_path(spec, "_", True).parent
+        if spill_dir.exists():
+            for path in spill_dir.glob("*.npz"):
+                path.unlink()
+        trim_allocator()
 
     def write_disk_caches(self, branch_ctx: PipelineContext | None = None) -> None:
         ctx = branch_ctx or self.ctx
@@ -394,44 +498,56 @@ def _split_stacked_parts(stacked: np.ndarray, part_rows: np.ndarray) -> list[np.
     return parts
 
 
+def _write_npy_to_zip(zf: zipfile.ZipFile, name: str, arr: np.ndarray) -> None:
+    buf = BytesIO()
+    np.lib.format.write_array(buf, np.asanyarray(arr), allow_pickle=False)
+    zf.writestr(f"{name}.npy", buf.getvalue())
+
+
 def write_pooled_disk_cache(
     output_base: Path,
     condition_label: str,
     zscore_mua: bool,
     pooled: PooledTrialData,
 ) -> Path:
-    """Save stacked L/R trial traces for one figure folder."""
+    """Save stacked L/R trial traces for one figure folder, one channel at a time."""
     path = pooled_disk_cache_path(output_base, condition_label, zscore_mua)
     path.parent.mkdir(parents=True, exist_ok=True)
     channels = sorted(
         set(pooled.left_by_ch) | set(pooled.right_by_ch)
         | set(pooled.sess_left_by_ch) | set(pooled.sess_right_by_ch)
     )
-    payload: dict[str, np.ndarray] = {
-        "t_ms": np.asarray(pooled.t_ms, dtype=float),
-        "win_idx": np.asarray(pooled.win_idx, dtype=np.int32),
-        "channels": np.asarray(channels, dtype=np.int32),
-    }
-    for ch in channels:
-        left_parts = pooled.left_by_ch.get(ch, [])
-        right_parts = pooled.right_by_ch.get(ch, [])
-        if left_parts:
-            payload[f"L_{ch}"] = np.vstack(left_parts)
-            payload[f"L_{ch}_rows"] = np.asarray(
-                [part.shape[0] for part in left_parts], dtype=np.int32,
-            )
-        if right_parts:
-            payload[f"R_{ch}"] = np.vstack(right_parts)
-            payload[f"R_{ch}_rows"] = np.asarray(
-                [part.shape[0] for part in right_parts], dtype=np.int32,
-            )
-        sess_left = pooled.sess_left_by_ch.get(ch, [])
-        sess_right = pooled.sess_right_by_ch.get(ch, [])
-        if sess_left:
-            payload[f"sessL_{ch}"] = np.asarray(sess_left, dtype=float)
-        if sess_right:
-            payload[f"sessR_{ch}"] = np.asarray(sess_right, dtype=float)
-    np.savez_compressed(path, **payload)
+    tmp_path = path.with_suffix(".npz.tmp")
+    with zipfile.ZipFile(tmp_path, "w", compression=zipfile.ZIP_STORED) as zf:
+        _write_npy_to_zip(zf, "t_ms", np.asarray(pooled.t_ms, dtype=float))
+        _write_npy_to_zip(zf, "win_idx", np.asarray(pooled.win_idx, dtype=np.int32))
+        _write_npy_to_zip(zf, "channels", np.asarray(channels, dtype=np.int32))
+        for ch in channels:
+            left_parts = pooled.left_by_ch.get(ch, [])
+            right_parts = pooled.right_by_ch.get(ch, [])
+            if left_parts:
+                stacked = np.vstack(left_parts)
+                _write_npy_to_zip(zf, f"L_{ch}", stacked)
+                _write_npy_to_zip(
+                    zf, f"L_{ch}_rows",
+                    np.asarray([part.shape[0] for part in left_parts], dtype=np.int32),
+                )
+                del stacked
+            if right_parts:
+                stacked = np.vstack(right_parts)
+                _write_npy_to_zip(zf, f"R_{ch}", stacked)
+                _write_npy_to_zip(
+                    zf, f"R_{ch}_rows",
+                    np.asarray([part.shape[0] for part in right_parts], dtype=np.int32),
+                )
+                del stacked
+            sess_left = pooled.sess_left_by_ch.get(ch, [])
+            sess_right = pooled.sess_right_by_ch.get(ch, [])
+            if sess_left:
+                _write_npy_to_zip(zf, f"sessL_{ch}", np.asarray(sess_left, dtype=float))
+            if sess_right:
+                _write_npy_to_zip(zf, f"sessR_{ch}", np.asarray(sess_right, dtype=float))
+    tmp_path.replace(path)
     return path
 
 
@@ -444,31 +560,34 @@ def load_pooled_disk_cache(
     if not path.exists():
         return None
     data = np.load(path, allow_pickle=False)
-    channels = [int(ch) for ch in np.asarray(data["channels"]).tolist()]
-    left_by_ch: dict[int, list[np.ndarray]] = {}
-    right_by_ch: dict[int, list[np.ndarray]] = {}
-    sess_left_by_ch: dict[int, list[float]] = {}
-    sess_right_by_ch: dict[int, list[float]] = {}
-    for ch in channels:
-        left_key, left_rows_key = f"L_{ch}", f"L_{ch}_rows"
-        right_key, right_rows_key = f"R_{ch}", f"R_{ch}_rows"
-        if left_key in data.files:
-            left_by_ch[ch] = _split_stacked_parts(data[left_key], data[left_rows_key])
-        if right_key in data.files:
-            right_by_ch[ch] = _split_stacked_parts(data[right_key], data[right_rows_key])
-        sess_left_key, sess_right_key = f"sessL_{ch}", f"sessR_{ch}"
-        if sess_left_key in data.files:
-            sess_left_by_ch[ch] = [float(v) for v in np.asarray(data[sess_left_key]).tolist()]
-        if sess_right_key in data.files:
-            sess_right_by_ch[ch] = [float(v) for v in np.asarray(data[sess_right_key]).tolist()]
-    return PooledTrialData(
-        t_ms=np.asarray(data["t_ms"], dtype=float),
-        win_idx=np.asarray(data["win_idx"], dtype=np.int32),
-        left_by_ch=left_by_ch,
-        right_by_ch=right_by_ch,
-        sess_left_by_ch=sess_left_by_ch,
-        sess_right_by_ch=sess_right_by_ch,
-    )
+    try:
+        channels = [int(ch) for ch in np.asarray(data["channels"]).tolist()]
+        left_by_ch: dict[int, list[np.ndarray]] = {}
+        right_by_ch: dict[int, list[np.ndarray]] = {}
+        sess_left_by_ch: dict[int, list[float]] = {}
+        sess_right_by_ch: dict[int, list[float]] = {}
+        for ch in channels:
+            left_key, left_rows_key = f"L_{ch}", f"L_{ch}_rows"
+            right_key, right_rows_key = f"R_{ch}", f"R_{ch}_rows"
+            if left_key in data.files:
+                left_by_ch[ch] = _split_stacked_parts(data[left_key], data[left_rows_key])
+            if right_key in data.files:
+                right_by_ch[ch] = _split_stacked_parts(data[right_key], data[right_rows_key])
+            sess_left_key, sess_right_key = f"sessL_{ch}", f"sessR_{ch}"
+            if sess_left_key in data.files:
+                sess_left_by_ch[ch] = [float(v) for v in np.asarray(data[sess_left_key]).tolist()]
+            if sess_right_key in data.files:
+                sess_right_by_ch[ch] = [float(v) for v in np.asarray(data[sess_right_key]).tolist()]
+        return PooledTrialData(
+            t_ms=np.asarray(data["t_ms"], dtype=float),
+            win_idx=np.asarray(data["win_idx"], dtype=np.int32),
+            left_by_ch=left_by_ch,
+            right_by_ch=right_by_ch,
+            sess_left_by_ch=sess_left_by_ch,
+            sess_right_by_ch=sess_right_by_ch,
+        )
+    finally:
+        data.close()
 
 
 def require_pooled_disk_cache(

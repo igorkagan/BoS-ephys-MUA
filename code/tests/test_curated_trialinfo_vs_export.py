@@ -16,7 +16,7 @@ from load_data.trial_selection_counts import (
     pipeline_trial_counts,
 )
 from process_channels.preprocess import MONKEY_CONDITIONS, recording_monkey_from_condition_label
-from run_pipeline.curated import DEFAULT_DATA_ROOT, curated_data_root, discover_curated_sessions
+from run_pipeline.curated import curated_data_root, discover_curated_sessions
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SESSION_LISTS = REPO_ROOT / "session_lists.m"
@@ -24,7 +24,7 @@ N_SESSIONS_PER_CONDITION = 10
 
 DATA_AVAILABLE = (
     os.environ.get("BOS_RUN_DATA_TESTS") == "1"
-    and DEFAULT_DATA_ROOT.is_dir()
+    and curated_data_root().is_dir()
 )
 
 
@@ -115,7 +115,7 @@ class PipelineTrialCountsUnitTests(unittest.TestCase):
             )
 
 
-@unittest.skipUnless(DATA_AVAILABLE, f"curated data root not available: {DEFAULT_DATA_ROOT}")
+@unittest.skipUnless(DATA_AVAILABLE, f"curated data root not available: {curated_data_root()}")
 class CuratedTrialinfoVsExportIntegrationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:

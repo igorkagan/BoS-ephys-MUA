@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Protocol
 
 from analyze_stability import combine as combine_step
+from analyze_stability import pref_unpref as pref_unpref_step
 from analyze_stability import stability_across_sessions as stability_step
 from load_data.io import ARRAY_NAMES
 from process_channels.features import ChannelSummary
@@ -63,11 +64,17 @@ def expected_branch_outputs(
     expected: list[Path] = []
 
     if "session_lr" in steps:
+        sessions_by_mode: dict[bool, list[str]] = {}
         for zscore_mua, trials_by_session in cache.trials.items():
+            sessions_by_mode[zscore_mua] = [
+                session_id for session_id, channels in trials_by_session.items() if channels
+            ]
+        if not any(sessions_by_mode.values()):
+            for zscore_mua, summaries in cache.summaries.items():
+                sessions_by_mode[zscore_mua] = sorted(_summary_sessions(summaries))
+        for zscore_mua, session_ids in sessions_by_mode.items():
             root = _mode_root(ctx, zscore_mua)
-            for session_id, channels in trials_by_session.items():
-                if not channels:
-                    continue
+            for session_id in session_ids:
                 event = ctx.alignment_event(session_id)
                 expected.extend(
                     root / f"{session_id}_{event}_{array_name}_LR.pdf"
@@ -130,6 +137,16 @@ def expected_branch_outputs(
             expected.append(
                 root / f"{ctx.condition_label}_{alignment}_arrays_combined_LR.pdf"
             )
+
+    if "pref_unpref" in steps and z_summaries:
+        root = _mode_root(ctx, True) / pref_unpref_step.COMBINED_SUBDIR
+        alignment = ctx.alignment_event_label(ctx.session_ids)
+        expected.extend(
+            root / name
+            for name in pref_unpref_step.branch_combined_pref_filenames(
+                ctx.condition_label, alignment,
+            )
+        )
 
     return sorted(set(expected), key=lambda path: path.as_posix())
 

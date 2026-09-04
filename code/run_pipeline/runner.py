@@ -10,6 +10,7 @@ from analyze_stability import arrays as array_step
 from analyze_stability import combine as cs
 from analyze_stability import consistency as acc
 from analyze_stability import deep_dives as pbw
+from analyze_stability import pref_unpref as pu
 from analyze_stability import session_lr as psl
 from analyze_stability import stability_across_sessions as sas
 from load_data.cache import (
@@ -18,10 +19,12 @@ from load_data.cache import (
     branch_has_summaries,
     require_pooled_disk_cache,
     load_summaries_disk_cache,
+    trim_allocator,
 )
 from load_data.io import session_sort_key
 from load_data.sessions import SessionListConfig, load_dual_nhp_configs, load_session_list
 from process_channels.preprocess import (
+    DUAL_NHP_GO_SEQS,
     TrialBranchSpec,
     branch_specs_for_run,
     choice_config_for_actor_side,
@@ -43,6 +46,7 @@ from run_pipeline.output_contracts import validate_pipeline_outputs
 
 ALL_STEPS = (
     "session_lr",
+    "pref_unpref",
     "consistency",
     "stability_across_sessions",
     "combine",
@@ -51,7 +55,7 @@ ALL_STEPS = (
     "comparisons",
 )
 
-_NON_DATA_STEPS = frozenset({"comparisons", "stability_across_sessions"})
+_NON_DATA_STEPS = frozenset({"comparisons", "stability_across_sessions", "pref_unpref"})
 _SUMMARY_STEPS = frozenset({"session_lr", "consistency", "best_worst"})
 _POOLED_STEPS = frozenset({"combine", "array_combined"})
 
@@ -189,6 +193,11 @@ def _disk_view_for_branch(
     )
 
 
+def _cache_has_trials(cache) -> bool:
+    trials = getattr(cache, "trials", None) or {}
+    return any(bool(sessions) for sessions in trials.values())
+
+
 def run_pipeline_steps(
     ctx: PipelineContext,
     steps: list[str],
@@ -207,16 +216,41 @@ def run_pipeline_steps(
             print("\n" + "=" * 72)
             print("STEP: load session/channel data (single read per channel)")
             print("=" * 72)
-            cache.populate(data_steps)
+
+            def _on_session(session_id: str) -> None:
+                if "session_lr" in steps:
+                    psl.plot_one_session_from_cache(cache, session_id)
+
+            cache.populate(data_steps, on_session=_on_session)
+            if "combine" in steps or "array_combined" in steps:
+                for name in cache.branches:
+                    cache.ensure_pooled(name)
         active = cache
     else:
         active = cache_view
 
     if "session_lr" in steps:
         print("\n" + "=" * 72)
-        print("STEP: plot_session_lr_mua")
+        if _cache_has_trials(active):
+            print("STEP: plot_session_lr_mua")
+            print("=" * 72)
+            psl.plot_from_cache(active, session_ids)
+        else:
+            print("STEP: plot_session_lr_mua (already written during load)")
+            print("=" * 72)
+
+    if "pref_unpref" in steps:
+        print("\n" + "=" * 72)
+        print("STEP: pref_unpref (MWU-sig channels, per-session preference)")
         print("=" * 72)
-        psl.plot_from_cache(active, session_ids)
+        summaries = sas.summaries_for_run(ctx, active.summaries)
+        if not summaries:
+            warnings.warn(
+                f"Skipping pref_unpref for {ctx.condition_label}: "
+                "no z-scored summaries (run the pipeline once or use disk cache)"
+            )
+        else:
+            pu.run_from_summaries(ctx, summaries)
 
     ref_session, ref_idx = _consistency_reference(session_ids)
 
@@ -369,9 +403,13 @@ def run_branched_pipeline(
                 child_ctx,
                 session_ids,
                 need_pooled=True,
-                need_summaries="stability_across_sessions" in steps,
+                need_summaries=(
+                    "stability_across_sessions" in steps or "pref_unpref" in steps
+                ),
             )
             run_pipeline_steps(child_ctx, steps, cache_view=view)
+            del view
+            trim_allocator()
         return
 
     shared = RunDataCache(base_ctx, session_ids)
@@ -380,7 +418,19 @@ def run_branched_pipeline(
     print("=" * 72)
     _print_run_header(base_ctx)
     print(f"Branches: {', '.join(spec.output_subdir or spec.name for spec in specs)}")
-    shared.populate(data_steps, specs)
+    if "session_lr" in steps:
+        print("session_lr PDFs are written per session during load, then trial arrays are dropped")
+
+    def _on_session(session_id: str) -> None:
+        if "session_lr" not in steps:
+            return
+        for spec in specs:
+            child_ctx = branch_context(base_ctx, spec)
+            apply_pipeline_context(child_ctx)
+            view = shared.branch_view(child_ctx, spec.name)
+            psl.plot_one_session_from_cache(view, session_id)
+
+    shared.populate(data_steps, specs, on_session=_on_session)
 
     for spec in specs:
         child_ctx = branch_context(base_ctx, spec)
@@ -391,13 +441,17 @@ def run_branched_pipeline(
                 f"Skipping {spec.output_subdir} branch for {child_ctx.condition_label}: "
                 "no channel summaries"
             )
+            shared.release_branch(spec.name)
             continue
+        if need_pooled:
+            shared.ensure_pooled(spec.name)
         label_suffix = f" / {spec.output_subdir}" if spec.output_subdir else ""
         print("\n" + "=" * 72)
         print(f"BRANCH: {child_ctx.condition_label}{label_suffix}")
         print("=" * 72)
         view = shared.branch_view(child_ctx, spec.name)
         run_pipeline_steps(child_ctx, steps, cache_view=view)
+        shared.release_branch(spec.name)
 
 
 def _run_comparisons(
@@ -487,6 +541,97 @@ def _run_comparison_suite(
             )
 
 
+def _go_seq_from_condition_label(label: str) -> str | None:
+    for seq in DUAL_NHP_GO_SEQS:
+        if label.endswith(f"_{seq}"):
+            return seq
+    return None
+
+
+def _write_pref_comparison_suites(
+    group: list[PipelineContext],
+    *,
+    include_solo: bool,
+) -> None:
+    """Fill comparison combined/ folders with pref overlays from disk summaries."""
+    from compare_conditions.compare import (
+        go_sequence_spec,
+        processing_scoped_output,
+        social_context_spec,
+    )
+
+    if not group:
+        return
+    monkey = group[0].recording_monkey
+    session_ids = list(group[0].session_ids)
+    if not session_ids or not monkey:
+        return
+    actor_side = recording_actor_side(session_ids[0], monkey)
+    solo_subdir = solo_output_subdir_for_actor_side(actor_side)
+    alignment = group[0].alignment_event_label(session_ids)
+    by_seq: dict[str, PipelineContext] = {}
+    for ctx in group:
+        seq = _go_seq_from_condition_label(ctx.condition_label)
+        if seq is not None:
+            by_seq[seq] = ctx
+
+    def _load_branch(ctx: PipelineContext, subdir: str) -> list:
+        cached = load_summaries_disk_cache(
+            ctx.output_base / subdir, ctx.condition_label, True,
+        )
+        return cached or []
+
+    def _write(summaries_a, summaries_b, out_root, spec, title: str) -> None:
+        if not summaries_a and not summaries_b:
+            warnings.warn(f"Skipping pref comparison {spec.file_tag}: no summaries")
+            return
+        combined_dir = processing_scoped_output(out_root, True) / pu.COMBINED_SUBDIR
+        pu.write_comparison_pref_combined(
+            summaries_a,
+            summaries_b,
+            combined_dir,
+            file_tag=spec.file_tag,
+            label_a=spec.label_a,
+            label_b=spec.label_b,
+            suptitle_grids=(
+                f"{title} | combined sessions | {alignment} | pref vs unpref"
+            ),
+            suptitle_arrays=(
+                f"{title} | array mean ± SE | {alignment} | pref vs unpref"
+            ),
+        )
+
+    if include_solo:
+        for seq, ctx in by_seq.items():
+            spec = social_context_spec(solo_subdir, seq)
+            _write(
+                _load_branch(ctx, "Dyadic"),
+                _load_branch(ctx, solo_subdir),
+                ctx.output_base / f"Dyadic_vs_{solo_subdir}_comparison",
+                spec,
+                f"{ctx.condition_label} {spec.file_tag}",
+            )
+
+    shared_parent = group[0].output_base.parent
+    if (
+        all(ctx.output_base.parent == shared_parent for ctx in group)
+        and "AgoB" in by_seq
+        and "BgoA" in by_seq
+    ):
+        socials = ["Dyadic"]
+        if include_solo:
+            socials.append(solo_subdir)
+        for social in socials:
+            spec = go_sequence_spec(social)
+            _write(
+                _load_branch(by_seq["AgoB"], social),
+                _load_branch(by_seq["BgoA"], social),
+                shared_parent / f"{monkey}_{social}_first_second_comparison",
+                spec,
+                f"{monkey} {social} {spec.file_tag}",
+            )
+
+
 def run_condition_pipeline(
     contexts: Iterator[PipelineContext],
     steps: list[str],
@@ -513,46 +658,45 @@ def run_condition_pipeline(
                     print(run_header(ctx))
                     print("#" * 72)
                 run_branched_pipeline(ctx, per_run_steps, include_solo=include_solo)
-                continue
-
-            shared_parent = group[0].output_base.parent
-            if any(ctx.output_base.parent != shared_parent for ctx in group):
+            elif any(ctx.output_base.parent != group[0].output_base.parent for ctx in group):
                 for ctx in group:
                     if run_header:
                         print("\n" + "#" * 72)
                         print(run_header(ctx))
                         print("#" * 72)
                     run_branched_pipeline(ctx, per_run_steps, include_solo=include_solo)
-                continue
-
-            labels = ", ".join(ctx.condition_label for ctx in group)
-            print("\n" + "#" * 72)
-            print(f"# one-load group: {labels} ({len(group[0].session_ids)} sessions)")
-            print("#" * 72)
-            shared_ctx = PipelineContext(
-                data_root=group[0].data_root,
-                session_ids=list(group[0].session_ids),
-                output_base=shared_parent,
-                condition_label=group[0].condition_key or shared_parent.name,
-                condition_key=group[0].condition_key,
-                layout=group[0].layout,
-                trial_filters={},
-                source_kind=group[0].source_kind,
-                session_parent=group[0].session_parent,
-                choice_field=group[0].choice_field,
-                left_choice=list(group[0].left_choice),
-                right_choice=list(group[0].right_choice),
-                recording_monkey=group[0].recording_monkey,
-            )
-            specs = _specs_for_go_seq_contexts(
-                group, include_solo=include_solo, shared_parent=shared_parent,
-            )
-            run_branched_pipeline(
-                shared_ctx,
-                per_run_steps,
-                include_solo=include_solo,
-                branch_specs=specs,
-            )
+            else:
+                shared_parent = group[0].output_base.parent
+                labels = ", ".join(ctx.condition_label for ctx in group)
+                print("\n" + "#" * 72)
+                print(f"# one-load group: {labels} ({len(group[0].session_ids)} sessions)")
+                print("#" * 72)
+                shared_ctx = PipelineContext(
+                    data_root=group[0].data_root,
+                    session_ids=list(group[0].session_ids),
+                    output_base=shared_parent,
+                    condition_label=group[0].condition_key or shared_parent.name,
+                    condition_key=group[0].condition_key,
+                    layout=group[0].layout,
+                    trial_filters={},
+                    source_kind=group[0].source_kind,
+                    session_parent=group[0].session_parent,
+                    choice_field=group[0].choice_field,
+                    left_choice=list(group[0].left_choice),
+                    right_choice=list(group[0].right_choice),
+                    recording_monkey=group[0].recording_monkey,
+                )
+                specs = _specs_for_go_seq_contexts(
+                    group, include_solo=include_solo, shared_parent=shared_parent,
+                )
+                run_branched_pipeline(
+                    shared_ctx,
+                    per_run_steps,
+                    include_solo=include_solo,
+                    branch_specs=specs,
+                )
+            if "pref_unpref" in per_run_steps:
+                _write_pref_comparison_suites(group, include_solo=include_solo)
     elif "comparisons" in steps:
         ran = True
     if not ran:

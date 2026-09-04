@@ -123,6 +123,7 @@ class PipelineCacheTests(unittest.TestCase):
             cache.populate(["session_lr", "consistency", "combine", "array_combined"])
 
             self.assertEqual(mock_loadmat.call_count, 4)  # 2 sessions × 2 channels
+            cache.ensure_pooled("dyadic")
             self.assertIsNotNone(cache.pooled)
             self.assertIn(True, cache.summaries)
             self.assertGreater(len(cache.summaries[True]), 0)
@@ -213,6 +214,7 @@ class PipelineCacheTests(unittest.TestCase):
 
             cache = RunDataCache(ctx, ctx.session_ids)
             cache.populate(["combine", "array_combined"])
+            cache.ensure_pooled("dyadic")
             pooled = cache.pooled
             self.assertIsNotNone(pooled)
 
@@ -377,7 +379,15 @@ class PipelineCacheTests(unittest.TestCase):
             self.assertEqual(mock_loadmat.call_count, 2)
             self.assertEqual(len(cache.branch("Elmo_AgoB__dyadic").summaries[True]), 2)
             self.assertEqual(len(cache.branch("Elmo_BgoA__dyadic").summaries[True]), 2)
+            self.assertEqual(cache.branch("Elmo_AgoB__dyadic").trials.get(True, {}), {})
+            self.assertIsNone(cache.branch("Elmo_AgoB__dyadic").pooled)
+            cache.ensure_pooled("Elmo_AgoB__dyadic")
+            cache.ensure_pooled("Elmo_BgoA__dyadic")
             self.assertIsNotNone(cache.branch("Elmo_AgoB__dyadic").pooled)
+            self.assertIsNotNone(cache.branch("Elmo_BgoA__dyadic").pooled)
+            cache.release_branch("Elmo_AgoB__dyadic")
+            self.assertIsNone(cache.branch("Elmo_AgoB__dyadic").pooled)
+            self.assertEqual(cache.branch("Elmo_AgoB__dyadic").summaries.get(True, []), [])
             self.assertIsNotNone(cache.branch("Elmo_BgoA__dyadic").pooled)
 
     @mock.patch("load_data.cache.load_trial_labels")

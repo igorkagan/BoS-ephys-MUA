@@ -76,6 +76,7 @@ class CliContractTests(unittest.TestCase):
         for module in (
             "run_scripts.run_curated",
             "run_scripts.run_session_list",
+            "run_scripts.run_decode_session_list",
             "run_scripts.run_comparisons",
             "run_scripts.plan_pipeline",
             "run_scripts.audit_outputs",

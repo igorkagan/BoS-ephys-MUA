@@ -174,6 +174,7 @@ def run_decode_branch(
     max_sessions: int | None = None,
     max_bins: int | None = None,
     smooth_ms: float | None = None,
+    session_parent: str | None = None,
 ) -> Path:
     """Run one timing × trial-type branch; return decoding output directory."""
     root = data_root if data_root is not None else default_curated_data_root()
@@ -257,6 +258,7 @@ def run_decode_branch(
                 bin_step_ms=BIN_STEP_MS,
                 smooth_ms=smooth,
                 zscore_mua=ZSCORE_MUA,
+                session_parent=session_parent,
             )
         except (ValueError, FileNotFoundError) as exc:
             print(f"  [skip] {sid}: {exc}")
@@ -352,6 +354,8 @@ def run_decode_curated(
     max_sessions: int | None = None,
     max_bins: int | None = None,
     smooth_ms: float | None = None,
+    session_ids: list[str] | None = None,
+    session_parent: str | None = None,
 ) -> None:
     seqs = go_seqs if go_seqs is not None else DUAL_NHP_GO_SEQS
     for go_seq in seqs:
@@ -364,6 +368,8 @@ def run_decode_curated(
                 decode_name=decode_name,
                 data_root=data_root,
                 figures_root=figures_root,
+                session_ids=session_ids,
+                session_parent=session_parent,
                 force=force,
                 validate_only=validate_only,
                 replot_only=replot_only,

@@ -215,32 +215,31 @@ def plot_session_from_cache(
         print(f"  Saved {out_path.name}")
 
 
-def plot_from_cache(cache, session_ids: list[str]) -> None:
-    """Plot per-session L/R PDFs from a populated :class:`RunDataCache`."""
+def plot_one_session_from_cache(cache, session_id: str) -> None:
+    """Plot one session's L/R PDFs from trials still in the cache."""
     condition_folder = cache.ctx.condition_label
     trial_filters = cache.ctx.trial_filters
     for zscore_mua in zscore_modes():
+        if session_id not in cache.trials.get(zscore_mua, {}):
+            continue
         output_dir = resolve_condition_output_dir(
             cache.ctx.output_base,
             zscore_mua,
             condition_folder,
         )
         output_dir.mkdir(parents=True, exist_ok=True)
-        label = "z-scored" if zscore_mua else "original"
-        print(
-            f"\n=== {condition_folder} | {label} | "
-            f"{len(session_ids)} session(s) -> {output_dir} ==="
-        )
-        for session_id in session_ids:
-            if session_id not in cache.trials.get(zscore_mua, {}):
-                warnings.warn(f"Skipping {session_id} ({label}): no cached trials")
-                continue
-            try:
-                plot_session_from_cache(
-                    cache, session_id, condition_folder, trial_filters, output_dir, zscore_mua,
-                )
-            except Exception as exc:
-                warnings.warn(f"Skipping {session_id} ({label}): {exc}")
+        try:
+            plot_session_from_cache(
+                cache, session_id, condition_folder, trial_filters, output_dir, zscore_mua,
+            )
+        except Exception as exc:
+            warnings.warn(f"Skipping {session_id} ({'z-scored' if zscore_mua else 'original'}): {exc}")
+
+
+def plot_from_cache(cache, session_ids: list[str]) -> None:
+    """Plot per-session L/R PDFs from a populated :class:`RunDataCache`."""
+    for session_id in session_ids:
+        plot_one_session_from_cache(cache, session_id)
 
 
 def run_condition(condition_folder: str, zscore_mua: bool) -> None:

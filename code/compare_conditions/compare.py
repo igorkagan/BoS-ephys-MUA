@@ -326,6 +326,18 @@ first_second_spec = go_sequence_spec
 dyadic_solo_spec = social_context_spec
 
 
+def combined_pdf_names(file_tag: str) -> set[str]:
+    """L/R combined PDFs plus pref/unpref twins in the same combined/ folder."""
+    from analyze_stability.pref_unpref import comparison_combined_pref_filenames
+
+    names = {
+        f"{file_tag}_{array_name}_combined.pdf" for array_name in ARRAY_NAMES
+    }
+    names.add(f"arrays_{file_tag}_combined.pdf")
+    names.update(comparison_combined_pref_filenames(file_tag))
+    return names
+
+
 def si_scatter_pdf(file_tag: str) -> str:
     return f"si_{file_tag}_scatter.pdf"
 
@@ -1128,10 +1140,7 @@ def validate_outputs(
     for name in required:
         if not (out_dir / name).exists():
             raise RuntimeError(f"Missing expected output: {name}")
-    expected_combined = {
-        f"{spec.file_tag}_{array_name}_combined.pdf"
-        for array_name in ARRAY_NAMES
-    } | {f"arrays_{spec.file_tag}_combined.pdf"}
+    expected_combined = combined_pdf_names(spec.file_tag)
     actual_combined = {path.name for path in (out_dir / "combined").glob("*.pdf")}
     if actual_combined != expected_combined:
         raise RuntimeError(
@@ -1413,7 +1422,7 @@ def run_level1_session_pdfs(
 def branch_output_dir_from_source_path(source_path: Path | str) -> Path:
     """Figure-folder for a branch from either that folder or ``.cache/summaries_*.npz``."""
     path = Path(source_path)
-    if path.is_file() and path.parent.name == ".cache":
+    if path.parent.name == ".cache":
         return path.parent.parent
     return path
 
@@ -1461,20 +1470,34 @@ def run_combined_pdfs(
         pooled_a = require_pooled_disk_cache(branch_a, condition_label_a, zscore_mua)
         pooled_b = require_pooled_disk_cache(branch_b, condition_label_b, zscore_mua)
     except FileNotFoundError as exc:
-        warnings.warn(f"Skipping combined PDFs for {out_dir.name}: {exc}")
-        return
-    print(f"Combined trial-pooled PDFs -> {out_dir / 'combined'}")
-    plot_timing_combined_outputs(
-        pooled_a.left_by_ch, pooled_a.right_by_ch,
-        pooled_b.left_by_ch, pooled_b.right_by_ch,
-        pooled_a.t_ms, pooled_a.win_idx,
+        warnings.warn(f"Skipping combined L/R PDFs for {out_dir.name}: {exc}")
+    else:
+        print(f"Combined trial-pooled PDFs -> {out_dir / 'combined'}")
+        plot_timing_combined_outputs(
+            pooled_a.left_by_ch, pooled_a.right_by_ch,
+            pooled_b.left_by_ch, pooled_b.right_by_ch,
+            pooled_a.t_ms, pooled_a.win_idx,
+            out_dir / "combined",
+            file_tag=spec.file_tag,
+            label_a=spec.label_a,
+            label_b=spec.label_b,
+            suptitle_channel_grids=channel_title,
+            suptitle_arrays=arrays_title,
+            zscore_mua=zscore_mua,
+        )
+    from analyze_stability.pref_unpref import write_comparison_pref_combined
+
+    summaries_a = load_summaries_disk_cache(branch_a, condition_label_a, zscore_mua) or []
+    summaries_b = load_summaries_disk_cache(branch_b, condition_label_b, zscore_mua) or []
+    write_comparison_pref_combined(
+        summaries_a,
+        summaries_b,
         out_dir / "combined",
         file_tag=spec.file_tag,
         label_a=spec.label_a,
         label_b=spec.label_b,
-        suptitle_channel_grids=channel_title,
-        suptitle_arrays=arrays_title,
-        zscore_mua=zscore_mua,
+        suptitle_grids=f"{channel_title} | pref vs unpref",
+        suptitle_arrays=f"{arrays_title} | pref vs unpref",
     )
 
 

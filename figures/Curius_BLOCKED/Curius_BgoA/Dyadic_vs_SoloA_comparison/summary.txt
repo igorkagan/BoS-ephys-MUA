@@ -1,0 +1,15 @@
+n_pairs: 1257
+median_delta_si: 0.009202600530726968
+mean_delta_si: 0.05407399727831173
+iqr_delta_si: 0.6259317016075626
+wilcoxon_p: 0.0027287389716799428
+sign_test_p: 0.0032629457628468982
+n_delta_pos: 641
+n_delta_neg: 539
+n_delta_zero: 77
+sign_flip_fraction: 0.40970564836913287
+n_channels_fdr_significant: 0
+deep_dive_pool_rule: all sessions matched; stable+task-evoked+median|SI|>=0.1 in both conditions; similar10=min |median dSI|; different10=max
+deep_dive_pool_size: 0
+similar10_count: 0
+different10_count: 0

@@ -1,0 +1,129 @@
+{
+  "actor_side": "A",
+  "alignment_events": [
+    "A_InitialFixationReleaseTime_ms",
+    "A_InitialFixationReleaseTime_ms",
+    "A_InitialFixationReleaseTime_ms",
+    "A_InitialFixationReleaseTime_ms",
+    "A_InitialFixationReleaseTime_ms",
+    "A_InitialFixationReleaseTime_ms",
+    "A_InitialFixationReleaseTime_ms",
+    "A_InitialFixationReleaseTime_ms",
+    "A_InitialFixationReleaseTime_ms",
+    "A_InitialFixationReleaseTime_ms"
+  ],
+  "analysis_window_ms": [
+    -500.0,
+    500.0
+  ],
+  "choice": {
+    "field": "A_LR_pos_list",
+    "values": {
+      "left": [
+        "Al"
+      ],
+      "right": [
+        "Ar"
+      ]
+    }
+  },
+  "code_fingerprint_sha256": "1270999e6d53e0e5bf4152d58a9f8de5f057ca9da4fac54cad0698d3c253eb45",
+  "comparison_axis": "social_context",
+  "condition_key": "Curius_BLOCKED",
+  "contract_version": 1,
+  "delta_definition": "B-A: SI(SoloA) - SI(Dyadic)",
+  "file_tag": "Dyadic_vs_SoloA",
+  "filters": {
+    "A": {
+      "A_Reward_list": [
+        "RA1",
+        "RA2",
+        "RA3",
+        "RA4"
+      ],
+      "TrialSubType_list": [
+        "Dyadic"
+      ],
+      "conf_predictability_list": [
+        "Blocked"
+      ],
+      "go_seq_500_list": [
+        "BgoA"
+      ]
+    },
+    "B": {
+      "A_Reward_list": [
+        "RA1",
+        "RA2",
+        "RA3",
+        "RA4"
+      ],
+      "TrialSubType_list": [
+        "SoloARewardAB",
+        "SoloA"
+      ],
+      "go_seq_500_list": [
+        "BgoA"
+      ]
+    }
+  },
+  "fixed_dimensions": {
+    "go_sequence": "BgoA"
+  },
+  "layout": "curated",
+  "matched_session_channel_pairs": 1257,
+  "operand_dimensions": {
+    "A": {
+      "go_sequence": "BgoA",
+      "social_context": "Dyadic"
+    },
+    "B": {
+      "go_sequence": "BgoA",
+      "social_context": "SoloA"
+    }
+  },
+  "operand_labels": {
+    "A": "Dyadic",
+    "B": "SoloA"
+  },
+  "per_channel_rows": 159,
+  "processing_mode": "zscored",
+  "recording_monkey": "Curius",
+  "session_ids": [
+    "20230330T133602.A_Curius.B_AE.SCP_01",
+    "20230413T142422.A_Curius.B_AE.SCP_01",
+    "20230505T123505.A_Curius.B_AE.SCP_01",
+    "20230509T130346.A_Curius.B_SM.SCP_01",
+    "20230511T142916.A_Curius.B_SM.SCP_01",
+    "20230518T135808.A_Curius.B_SM.SCP_01",
+    "20230523T145755.A_Curius.B_SM.SCP_01",
+    "20230525T103049.A_Curius.B_SM.SCP_01",
+    "20230622T111856.A_Curius.B_SM.SCP_01",
+    "20230703T122644.A_Curius.B_MK.SCP_01"
+  ],
+  "smooth_ms": 50.0,
+  "source_kind": "curated",
+  "source_paths": {
+    "A": "/home/igor/Documents/GitHub/BoS-ephys-MUA/figures/Curius_BLOCKED/Curius_BgoA/Dyadic/.cache/summaries_zscore.npz",
+    "B": "/home/igor/Documents/GitHub/BoS-ephys-MUA/figures/Curius_BLOCKED/Curius_BgoA/SoloA/.cache/summaries_zscore.npz"
+  },
+  "status": "complete",
+  "summary_source_modes": {
+    "A": "disk_cache",
+    "B": "disk_cache"
+  },
+  "trial_data_root": "/home/igor/snd/taskcontroller/SCP_DATA/SCP-CTRL-01/MUA_curated_sessions",
+  "used_session_ids": [
+    "20230330T133602.A_Curius.B_AE.SCP_01",
+    "20230413T142422.A_Curius.B_AE.SCP_01",
+    "20230505T123505.A_Curius.B_AE.SCP_01",
+    "20230509T130346.A_Curius.B_SM.SCP_01",
+    "20230511T142916.A_Curius.B_SM.SCP_01",
+    "20230518T135808.A_Curius.B_SM.SCP_01",
+    "20230523T145755.A_Curius.B_SM.SCP_01",
+    "20230525T103049.A_Curius.B_SM.SCP_01",
+    "20230622T111856.A_Curius.B_SM.SCP_01",
+    "20230703T122644.A_Curius.B_MK.SCP_01"
+  ],
+  "varied_dimension": "social_context"
+}

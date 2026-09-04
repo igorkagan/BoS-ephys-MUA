@@ -29,6 +29,7 @@ from compare_conditions.compare import (
 )
 from load_data.sessions import SessionListConfig
 from load_data.io import ARRAY_NAMES
+from analyze_stability.pref_unpref import comparison_combined_pref_filenames
 from process_channels.features import ChannelSummary
 from run_pipeline.runner import (
     ALL_STEPS,
@@ -59,6 +60,16 @@ def _summary(si: float) -> ChannelSummary:
         evoked_p_right=0.5,
         task_evoked=True,
     )
+
+
+def _touch_combined_pdfs(out: Path, spec: ComparisonSpec) -> None:
+    combined = out / "combined"
+    combined.mkdir(exist_ok=True)
+    for array_name in ARRAY_NAMES:
+        (combined / f"{spec.file_tag}_{array_name}_combined.pdf").touch()
+    (combined / f"arrays_{spec.file_tag}_combined.pdf").touch()
+    for name in comparison_combined_pref_filenames(spec.file_tag):
+        (combined / name).touch()
 
 
 def _inputs(
@@ -243,11 +254,9 @@ class ComparisonNumericsAndManifestTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp)
             (out / "session").mkdir()
-            (out / "combined").mkdir()
             for array_name in ARRAY_NAMES:
                 (out / "session" / f"session-1_{array_name}_{spec.file_tag}.pdf").touch()
-                (out / "combined" / f"{spec.file_tag}_{array_name}_combined.pdf").touch()
-            (out / "combined" / f"arrays_{spec.file_tag}_combined.pdf").touch()
+            _touch_combined_pdfs(out, spec)
             for name in (
                 "si_delta_heatmap.pdf",
                 "waveform_r_heatmap.pdf",
@@ -271,11 +280,9 @@ class ComparisonNumericsAndManifestTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp)
             (out / "session").mkdir()
-            (out / "combined").mkdir()
             for array_name in ARRAY_NAMES:
                 (out / "session" / f"session-1_{array_name}_{spec.file_tag}.pdf").touch()
-                (out / "combined" / f"{spec.file_tag}_{array_name}_combined.pdf").touch()
-            (out / "combined" / f"arrays_{spec.file_tag}_combined.pdf").touch()
+            _touch_combined_pdfs(out, spec)
             for name in (
                 "si_delta_heatmap.pdf",
                 "waveform_r_heatmap.pdf",
@@ -311,11 +318,9 @@ class ComparisonNumericsAndManifestTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp)
             (out / "session").mkdir()
-            (out / "combined").mkdir()
             for array_name in ARRAY_NAMES:
                 (out / "session" / f"session-1_{array_name}_{spec.file_tag}.pdf").touch()
-                (out / "combined" / f"{spec.file_tag}_{array_name}_combined.pdf").touch()
-            (out / "combined" / f"arrays_{spec.file_tag}_combined.pdf").touch()
+            _touch_combined_pdfs(out, spec)
             for name in (
                 "si_delta_heatmap.pdf",
                 "waveform_r_heatmap.pdf",
@@ -339,6 +344,7 @@ class ComparisonRunnerTests(unittest.TestCase):
 
     def test_canonical_steps_expose_comparisons_only(self) -> None:
         self.assertIn("comparisons", ALL_STEPS)
+        self.assertIn("pref_unpref", ALL_STEPS)
         self.assertNotIn("timing_compare", ALL_STEPS)
         self.assertEqual(parse_steps("comparisons"), ["comparisons"])
         with warnings.catch_warnings(record=True) as caught:

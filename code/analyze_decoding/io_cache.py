@@ -157,3 +157,39 @@ def save_combined_result(path: Path, combined: CombinedDecodeResult) -> None:
         if np.isfinite(combined.cluster_threshold)
         else np.nan,
     )
+
+
+def load_combined_result(path: Path) -> CombinedDecodeResult:
+    z = np.load(path, allow_pickle=True)
+    t = np.asarray(z["bin_centers_ms"], dtype=float)
+    curves = np.asarray(z["session_curves"], dtype=float)
+    if curves.size == 0:
+        curves = np.empty((0, t.size))
+    elif curves.ndim == 1:
+        curves = curves.reshape(1, -1)
+    ids = []
+    if "session_ids" in z.files:
+        ids = [str(x) for x in np.asarray(z["session_ids"]).tolist()]
+    mask = (
+        np.asarray(z["cluster_mask"], dtype=bool)
+        if "cluster_mask" in z.files
+        else np.zeros(t.shape, dtype=bool)
+    )
+    cluster_p = (
+        np.asarray(z["cluster_p"], dtype=float)
+        if "cluster_p" in z.files
+        else np.array([], dtype=float)
+    )
+    thr = float(z["cluster_threshold"]) if "cluster_threshold" in z.files else np.nan
+    return CombinedDecodeResult(
+        bin_centers_ms=t,
+        mean=np.asarray(z["mean"], dtype=float),
+        ci_low=np.asarray(z["ci_low"], dtype=float),
+        ci_high=np.asarray(z["ci_high"], dtype=float),
+        session_curves=curves,
+        session_ids=ids,
+        n_sessions_used=int(z["n_sessions_used"]),
+        cluster_mask=mask,
+        cluster_p=cluster_p,
+        cluster_threshold=thr,
+    )

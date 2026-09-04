@@ -16,9 +16,13 @@ from process_channels.preprocess import (
     trial_filters_for_go_seq,
 )
 
-DEFAULT_DATA_ROOT = Path(
+_LINUX_CURATED = Path(
+    "/home/igor/snd/taskcontroller/SCP_DATA/SCP-CTRL-01/MUA_curated_sessions",
+)
+_WINDOWS_CURATED = Path(
     r"S:\taskcontroller\SCP_DATA\SCP-CTRL-01\MUA_curated_sessions",
 )
+DEFAULT_DATA_ROOT = _WINDOWS_CURATED
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -33,7 +37,11 @@ def curated_condition_output(
 
 
 def curated_data_root(data_root: Path | None = None) -> Path:
-    return data_root if data_root is not None else DEFAULT_DATA_ROOT
+    if data_root is not None:
+        return data_root
+    if _LINUX_CURATED.is_dir():
+        return _LINUX_CURATED
+    return _WINDOWS_CURATED
 
 
 def curated_output_base(

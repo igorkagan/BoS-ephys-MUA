@@ -218,6 +218,129 @@ def plot_same_diff_combined(
     plt.close(fig)
 
 
+BLOCKED_COLOR = "#009E73"
+SHUFFLED_COLOR = "#CC79A7"
+DYADIC_COLOR = "#E69F00"
+SOLO_COLOR = "#56B4E9"
+
+
+def _panel_compare_overlay(
+    ax: plt.Axes,
+    group_a: CombinedDecodeResult,
+    group_b: CombinedDecodeResult,
+    diff_mask: np.ndarray | None,
+    *,
+    title: str,
+    legend: bool = True,
+    color_a: str = BLOCKED_COLOR,
+    color_b: str = SHUFFLED_COLOR,
+    name_a: str = "BLOCKED",
+    name_b: str = "SHUFFLED",
+    cluster_label: str = "p<0.05",
+) -> None:
+    t = group_a.bin_centers_ms
+    ax.fill_between(
+        t, group_a.ci_low, group_a.ci_high,
+        color=color_a, alpha=0.22, linewidth=0, zorder=2,
+    )
+    ax.plot(
+        t, group_a.mean, color=color_a, marker="o", markersize=2.5,
+        linewidth=1.4, zorder=3, label=f"{name_a} n={group_a.n_sessions_used}",
+    )
+    ax.fill_between(
+        t, group_b.ci_low, group_b.ci_high,
+        color=color_b, alpha=0.22, linewidth=0, zorder=2,
+    )
+    ax.plot(
+        t, group_b.mean, color=color_b, marker="o", markersize=2.5,
+        linewidth=1.4, zorder=3, label=f"{name_b} n={group_b.n_sessions_used}",
+    )
+    _draw_cluster_bars(ax, t, diff_mask, color="k", y=0.06, label=cluster_label)
+    _annotate_axes(ax)
+    ax.set_title(title, fontsize=8)
+    if legend:
+        ax.legend(loc="upper right", fontsize=7, frameon=False)
+
+
+def plot_same_diff_compare(
+    results: dict[str, dict],
+    *,
+    out_pdf: Path,
+    monkey: str,
+    go_seq: str,
+) -> None:
+    events = list(results)
+    fig, axes = plt.subplots(1, len(events), figsize=(10.0, 4.5), sharey=True)
+    if len(events) == 1:
+        axes = [axes]
+    for col, event in enumerate(events):
+        ax = axes[col]
+        res = results[event]
+        col_lab = f"{'1st' if col == 0 else '2nd'}: {align_short_label(event)}"
+        _panel_compare_overlay(
+            ax,
+            res["blocked"],
+            res["shuffled"],
+            res["cluster"].mask,
+            title=f"{col_lab}\nsame/diff",
+            legend=col == 0,
+            color_a=BLOCKED_COLOR,
+            color_b=SHUFFLED_COLOR,
+            name_a="BLOCKED",
+            name_b="SHUFFLED",
+            cluster_label="BLOCKED vs SHUFFLED p<0.05",
+        )
+        ax.set_xlabel("Time from action (ms)")
+        if col == 0:
+            ax.set_ylabel("Decoding accuracy")
+    fig.suptitle(
+        f"{monkey} | Dyadic | {go_seq} | same vs diff | BLOCKED vs SHUFFLED\n"
+        f"unpaired cluster perm on session curves | {bin_settings_label()} | "
+        f"smooth={GAUSSIAN_SMOOTH_MS:g} ms ({GAUSSIAN_SMOOTH_MODE})",
+        fontsize=9,
+    )
+    fig.tight_layout(rect=(0, 0, 1, 0.86))
+    out_pdf.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out_pdf, dpi=150)
+    plt.close(fig)
+
+
+def plot_actor_own_compare(
+    result: dict,
+    *,
+    out_pdf: Path,
+    monkey: str,
+    go_seq: str,
+    list_tag: str,
+) -> None:
+    fig, ax = plt.subplots(1, 1, figsize=(6.0, 4.5))
+    _panel_compare_overlay(
+        ax,
+        result["dyadic"],
+        result["solo"],
+        result["cluster"].mask,
+        title="own action (actor L/R @ own release)",
+        legend=True,
+        color_a=DYADIC_COLOR,
+        color_b=SOLO_COLOR,
+        name_a="Dyadic",
+        name_b="SoloA",
+        cluster_label="Dyadic vs SoloA p<0.05",
+    )
+    ax.set_xlabel("Time from action (ms)")
+    ax.set_ylabel("Decoding accuracy")
+    fig.suptitle(
+        f"{monkey} | {list_tag} | {go_seq} | Dyadic vs SoloA | actor choice\n"
+        f"unpaired cluster perm on session curves | {bin_settings_label()} | "
+        f"smooth={GAUSSIAN_SMOOTH_MS:g} ms ({GAUSSIAN_SMOOTH_MODE})",
+        fontsize=9,
+    )
+    fig.tight_layout(rect=(0, 0, 1, 0.86))
+    out_pdf.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out_pdf, dpi=150)
+    plt.close(fig)
+
+
 def combine_panel_dict(
     session_panels: list[dict],
     *,

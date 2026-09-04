@@ -41,6 +41,11 @@ def _audit_comparison_manifest(path: Path) -> tuple[list[str], list[str]]:
         f"combined/{file_tag}_{array_name}_combined.pdf"
         for array_name in ARRAY_NAMES
     )
+    required.append(f"combined/arrays_{file_tag}_combined_pref.pdf")
+    required.extend(
+        f"combined/{file_tag}_{array_name}_combined_pref.pdf"
+        for array_name in ARRAY_NAMES
+    )
     missing = [name for name in required if not (root / name).is_file()]
     if payload.get("status") != "complete":
         missing.append("manifest status=complete")

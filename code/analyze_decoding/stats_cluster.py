@@ -51,13 +51,19 @@ def clusters_from_stat(
         above = np.isfinite(stat) & (np.abs(stat) > threshold)
     out: list[tuple[int, int, float]] = []
     for start, stop in _contiguous_runs(above):
-        mass = float(np.nansum(stat[start:stop]))
+        sl = stat[start:stop]
+        mass = float(np.nansum(sl if one_sided else np.abs(sl)))
         out.append((start, stop, mass))
     return out
 
 
-def _max_cluster_mass(stat: np.ndarray, threshold: float) -> float:
-    clusters = clusters_from_stat(stat, threshold)
+def _max_cluster_mass(
+    stat: np.ndarray,
+    threshold: float,
+    *,
+    one_sided: bool = True,
+) -> float:
+    clusters = clusters_from_stat(stat, threshold, one_sided=one_sided)
     if not clusters:
         return 0.0
     return float(max(m for _, _, m in clusters))
@@ -162,6 +168,88 @@ def cluster_p_signflip(
         with np.errstate(divide="ignore", invalid="ignore"):
             t_p = np.divide(mean_p, sem_p, out=np.zeros(n_t), where=np.isfinite(sem_p) & (sem_p > 0))
         null_max[p] = _max_cluster_mass(t_p, threshold)
+
+    clusters: list[ClusterResult] = []
+    mask = np.zeros(n_t, dtype=bool)
+    for start, stop, mass in obs_clusters:
+        p_val = float((1 + np.sum(null_max >= mass)) / (1 + n_perm))
+        clusters.append(ClusterResult(start=start, stop=stop, mass=mass, p_value=p_val))
+        if p_val < cluster_forming_p:
+            mask[start:stop] = True
+
+    return ClusterTestResult(clusters=clusters, mask=mask, threshold=threshold)
+
+
+def welch_t_curves(curves_a: np.ndarray, curves_b: np.ndarray) -> np.ndarray:
+    """Welch two-sample t at each bin: (mean_a − mean_b) / se. Shape ``(n_bins,)``."""
+    a = np.asarray(curves_a, dtype=float)
+    b = np.asarray(curves_b, dtype=float)
+    if a.ndim != 2 or b.ndim != 2:
+        raise ValueError("curves must be 2D (n_sessions, n_bins)")
+    if a.shape[1] != b.shape[1]:
+        raise ValueError(f"time axis mismatch: {a.shape[1]} vs {b.shape[1]}")
+    n_t = a.shape[1]
+    mean_a = np.nanmean(a, axis=0)
+    mean_b = np.nanmean(b, axis=0)
+    n_a = np.sum(np.isfinite(a), axis=0).astype(float)
+    n_b = np.sum(np.isfinite(b), axis=0).astype(float)
+    var_a = np.nanvar(a, axis=0, ddof=1)
+    var_b = np.nanvar(b, axis=0, ddof=1)
+    se2 = np.divide(var_a, np.maximum(n_a, 1.0)) + np.divide(var_b, np.maximum(n_b, 1.0))
+    se = np.sqrt(se2)
+    t = np.zeros(n_t, dtype=float)
+    ok = (n_a > 1) & (n_b > 1) & np.isfinite(se) & (se > 0) & np.isfinite(mean_a) & np.isfinite(mean_b)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        t[ok] = (mean_a[ok] - mean_b[ok]) / se[ok]
+    return t
+
+
+def cluster_p_two_sample(
+    curves_a: np.ndarray,
+    curves_b: np.ndarray,
+    *,
+    n_perm: int = 5000,
+    cluster_forming_p: float = 0.05,
+    seed: int = 0,
+) -> ClusterTestResult:
+    """Unpaired two-sample cluster test by shuffling session curves across groups.
+
+    ``curves_a`` / ``curves_b`` shape ``(n_sessions, n_bins)``. Observed statistic
+    is Welch t (a − b) at each time. Two-sided clusters on ``|t|``; mass = sum of
+    ``|t|`` in the cluster. Null: random reassignment to groups of the original
+    sizes. FWER via max cluster mass (add-one p).
+    """
+    a = np.asarray(curves_a, dtype=float)
+    b = np.asarray(curves_b, dtype=float)
+    if a.ndim != 2 or b.ndim != 2 or a.shape[1] != b.shape[1]:
+        n_t = a.shape[-1] if a.ndim == 2 else (b.shape[-1] if b.ndim == 2 else 0)
+        return ClusterTestResult(
+            clusters=[],
+            mask=np.zeros(n_t, dtype=bool),
+            threshold=np.nan,
+        )
+    n_a, n_t = a.shape
+    n_b = b.shape[0]
+    if n_a < 2 or n_b < 2:
+        return ClusterTestResult(
+            clusters=[],
+            mask=np.zeros(n_t, dtype=bool),
+            threshold=np.nan,
+        )
+
+    t_obs = welch_t_curves(a, b)
+    df = max(1, n_a + n_b - 2)
+    threshold = float(stats.t.ppf(1.0 - cluster_forming_p / 2.0, df=df))
+    obs_clusters = clusters_from_stat(t_obs, threshold, one_sided=False)
+
+    pool = np.vstack([a, b])
+    n_all = pool.shape[0]
+    rng = np.random.default_rng(seed)
+    null_max = np.zeros(n_perm, dtype=float)
+    for p in range(n_perm):
+        idx = rng.permutation(n_all)
+        t_p = welch_t_curves(pool[idx[:n_a]], pool[idx[n_a:]])
+        null_max[p] = _max_cluster_mass(t_p, threshold, one_sided=False)
 
     clusters: list[ClusterResult] = []
     mask = np.zeros(n_t, dtype=bool)

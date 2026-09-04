@@ -28,6 +28,7 @@ from load_data.io import (
     load_trial_labels,
     window_indices,
 )
+from load_data.sessions import condition_key_from_list_name, is_confederate_list
 from process_channels.preprocess import (
     alignment_event_for_actor_side,
     choice_config_for_actor_side,
@@ -59,13 +60,37 @@ class SessionDecodeData:
     channel_numbers: list[int]
 
 
+def filter_condition_key(condition: str) -> str:
+    """Trial-filter key: Elmo_BLOCKED_CONF → Elmo_BLOCKED."""
+    if is_confederate_list(condition):
+        return condition_key_from_list_name(condition)
+    return condition
+
+
+def decode_session_dir(
+    data_root: Path,
+    session_id: str,
+    condition: str,
+    *,
+    session_parent: str | None = None,
+) -> Path:
+    """Session folder: curated ``data_root/condition/sid`` or flat ``data_root/sid``.
+
+    ``session_parent=None`` uses ``condition`` (curated). Empty string = flat export.
+    """
+    if session_parent is None:
+        return data_root / condition / session_id
+    parent = data_root / session_parent if session_parent else data_root
+    return parent / session_id
+
+
 def trial_filters_for_branch(
     condition: str,
     go_seq: str,
     trial_type: str,
     actor_side: str,
 ) -> dict[str, list[str]]:
-    dyadic = trial_filters_for_go_seq(condition, go_seq, actor_side)
+    dyadic = trial_filters_for_go_seq(filter_condition_key(condition), go_seq, actor_side)
     if trial_type == "Dyadic":
         return dyadic
     if trial_type in ("SoloA", "SoloB"):
@@ -217,12 +242,15 @@ def build_session_decode_data(
     smooth_ms: float = GAUSSIAN_SMOOTH_MS,
     zscore_mua: bool = ZSCORE_MUA,
     pre_post_tag: str = PRE_POST_TAG,
+    session_parent: str | None = None,
 ) -> SessionDecodeData:
     """Stack channels, filter trials for one target, bin, flatten."""
     monkey = recording_monkey_from_condition_label(condition)
     actor_side = recording_actor_side(session_id, monkey)
     event = alignment_event or alignment_event_for_actor_side(actor_side)
-    session_dir = data_root / condition / session_id
+    session_dir = decode_session_dir(
+        data_root, session_id, condition, session_parent=session_parent,
+    )
     event_dir = session_dir / event
     if not event_dir.is_dir():
         raise FileNotFoundError(f"Missing event dir: {event_dir}")
@@ -298,6 +326,7 @@ def build_aligned_multilabel_bundle(
     smooth_ms: float = GAUSSIAN_SMOOTH_MS,
     zscore_mua: bool = ZSCORE_MUA,
     pre_post_tag: str = PRE_POST_TAG,
+    session_parent: str | None = None,
 ) -> SessionDecodeData:
     """Dyadic/grid: neural @ alignment with A_choice, B_choice, same_diff attached.
 
@@ -306,7 +335,9 @@ def build_aligned_multilabel_bundle(
     """
     monkey = recording_monkey_from_condition_label(condition)
     actor_side = recording_actor_side(session_id, monkey)
-    session_dir = data_root / condition / session_id
+    session_dir = decode_session_dir(
+        data_root, session_id, condition, session_parent=session_parent,
+    )
     event_dir = session_dir / alignment_event
     if not event_dir.is_dir():
         raise FileNotFoundError(f"Missing event dir: {event_dir}")

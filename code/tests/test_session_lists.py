@@ -35,7 +35,7 @@ class SessionListsParserTests(unittest.TestCase):
 
     def test_elmo_blocked_conf_matches_selection_list(self) -> None:
         cfg = load_session_list("Elmo_BLOCKED_CONF", SESSION_LISTS)
-        self.assertEqual(len(cfg.session_ids), 40)
+        self.assertEqual(len(cfg.session_ids), 38)
         self.assertEqual(cfg.session_ids[0], "20201204T125624.A_Elmo.B_FS.SCP_01")
         self.assertEqual(cfg.output_folder, cfg.root_folder / "Elmo_BLOCKED_CONF")
 
