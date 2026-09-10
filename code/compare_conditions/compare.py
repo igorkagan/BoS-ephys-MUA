@@ -1129,6 +1129,12 @@ def validate_outputs(
     pngs = list(out_dir.rglob("*.png"))
     if pngs:
         raise RuntimeError(f"Found {len(pngs)} PNG files; expected PDF-only outputs")
+    # Directory-entry strings, not Path.exists: Windows matching is
+    # case-insensitive, and lowercase SI scatter names must be reported as
+    # casing mismatch rather than "missing" on Linux.
+    actual_paths = [path for path in out_dir.rglob("*") if path.is_file()]
+    actual_names = {path.name for path in actual_paths}
+    actual_rel = {path.relative_to(out_dir).as_posix() for path in actual_paths}
     required = [
         f"combined/arrays_{spec.file_tag}_combined.pdf",
         "si_delta_heatmap.pdf",
@@ -1143,8 +1149,15 @@ def validate_outputs(
         "comparison_manifest.json",
     ]
     for name in required:
-        if not (out_dir / name).exists():
-            raise RuntimeError(f"Missing expected output: {name}")
+        if name in actual_rel:
+            continue
+        matches = [entry for entry in actual_rel if entry.casefold() == name.casefold()]
+        if matches:
+            raise RuntimeError(
+                f"SI scatter filename casing mismatch: found {matches!r}, "
+                f"expected {name!r}"
+            )
+        raise RuntimeError(f"Missing expected output: {name}")
     expected_combined = combined_pdf_names(spec.file_tag, spec)
     actual_combined = {path.name for path in (out_dir / "combined").glob("*.pdf")}
     if actual_combined != expected_combined:
@@ -1189,33 +1202,9 @@ def validate_outputs(
             for path in out_dir.rglob("*BgoA*")
             if path.is_file()
         )
-    # Compare directory-entry strings, not Path.exists/rglob(pattern): Windows
-    # path matching is case-insensitive, while the canonical go-sequence tag
-    # intentionally contains ``AgoB_vs_BgoA``.
-    actual_names = {
-        path.name
-        for path in out_dir.rglob("*")
-        if path.is_file()
-    }
     present = sorted(forbidden & actual_names)
     if present:
         raise RuntimeError(f"Forbidden legacy/mislabeled outputs found: {', '.join(present)}")
-    # Soft check: go_sequence SI scatter files should use canonical casing.
-    if spec.comparison_axis == "go_sequence":
-        for expected in (
-            si_scatter_pdf(spec.file_tag),
-            si_channel_median_scatter_pdf(spec.file_tag),
-        ):
-            matches = [
-                name
-                for name in actual_names
-                if name.casefold() == expected.casefold()
-            ]
-            if matches and expected not in matches:
-                raise RuntimeError(
-                    f"SI scatter filename casing mismatch: found {matches!r}, "
-                    f"expected {expected!r}"
-                )
 
 
 def comparison_filter_summary(
