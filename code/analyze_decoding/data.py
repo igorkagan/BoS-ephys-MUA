@@ -33,7 +33,7 @@ from process_channels.preprocess import (
     alignment_event_for_actor_side,
     choice_config_for_actor_side,
     recording_actor_side,
-    recording_monkey_from_condition_label,
+    recording_monkey_for_decode,
     trial_filters_for_go_seq,
     trial_filters_for_solo_from_dyadic,
     zscore_channel_trials,
@@ -243,9 +243,12 @@ def build_session_decode_data(
     zscore_mua: bool = ZSCORE_MUA,
     pre_post_tag: str = PRE_POST_TAG,
     session_parent: str | None = None,
+    recording_monkey: str | None = None,
 ) -> SessionDecodeData:
     """Stack channels, filter trials for one target, bin, flatten."""
-    monkey = recording_monkey_from_condition_label(condition)
+    monkey = recording_monkey_for_decode(
+        condition, session_id=session_id, recording_monkey=recording_monkey,
+    )
     actor_side = recording_actor_side(session_id, monkey)
     event = alignment_event or alignment_event_for_actor_side(actor_side)
     session_dir = decode_session_dir(
@@ -327,13 +330,16 @@ def build_aligned_multilabel_bundle(
     zscore_mua: bool = ZSCORE_MUA,
     pre_post_tag: str = PRE_POST_TAG,
     session_parent: str | None = None,
+    recording_monkey: str | None = None,
 ) -> SessionDecodeData:
     """Dyadic/grid: neural @ alignment with A_choice, B_choice, same_diff attached.
 
     Trials = filter base_mask only (not restricted to one side's L/R). Labels may
     contain ``\"\"`` for missing choices; use ``subset_for_conditions`` before decode.
     """
-    monkey = recording_monkey_from_condition_label(condition)
+    monkey = recording_monkey_for_decode(
+        condition, session_id=session_id, recording_monkey=recording_monkey,
+    )
     actor_side = recording_actor_side(session_id, monkey)
     session_dir = decode_session_dir(
         data_root, session_id, condition, session_parent=session_parent,

@@ -247,6 +247,26 @@ def recording_monkey_from_condition_label(condition_label: str) -> str:
     raise ValueError(f"Cannot infer recording monkey from condition label {condition_label!r}")
 
 
+def recording_monkey_for_decode(
+    condition: str,
+    *,
+    session_id: str = "",
+    recording_monkey: str | None = None,
+) -> str:
+    """Recorded monkey for decode paths and trial labels.
+
+    Confederate / curated labels start with Elmo_/Curius_. ``DUAL_NHP`` needs
+    ``recording_monkey`` or a ``session_id`` (U vs B export).
+    """
+    if recording_monkey:
+        return recording_monkey
+    if condition == "DUAL_NHP":
+        if not session_id:
+            raise ValueError("DUAL_NHP decode needs recording_monkey or session_id")
+        return recording_monkey_from_session_id(session_id, condition_label=condition)
+    return recording_monkey_from_condition_label(condition)
+
+
 def recording_monkey_from_session_id(session_id: str, *, condition_label: str = "") -> str:
     """Infer recorded monkey from session id / condition label only."""
     datetime_part = session_id.split(".", 1)[0]

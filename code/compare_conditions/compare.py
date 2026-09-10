@@ -326,15 +326,20 @@ first_second_spec = go_sequence_spec
 dyadic_solo_spec = social_context_spec
 
 
-def combined_pdf_names(file_tag: str) -> set[str]:
+def combined_pdf_names(file_tag: str, spec: ComparisonSpec | None = None) -> set[str]:
     """L/R combined PDFs plus pref/unpref twins in the same combined/ folder."""
-    from analyze_stability.pref_unpref import comparison_combined_pref_filenames
+    from analyze_stability.pref_unpref import (
+        comparison_combined_pref_filenames,
+        comparison_solo_locked_pref_filenames,
+    )
 
     names = {
         f"{file_tag}_{array_name}_combined.pdf" for array_name in ARRAY_NAMES
     }
     names.add(f"arrays_{file_tag}_combined.pdf")
     names.update(comparison_combined_pref_filenames(file_tag))
+    if spec is not None and spec.comparison_axis == "social_context":
+        names.update(comparison_solo_locked_pref_filenames(file_tag))
     return names
 
 
@@ -1140,7 +1145,7 @@ def validate_outputs(
     for name in required:
         if not (out_dir / name).exists():
             raise RuntimeError(f"Missing expected output: {name}")
-    expected_combined = combined_pdf_names(spec.file_tag)
+    expected_combined = combined_pdf_names(spec.file_tag, spec)
     actual_combined = {path.name for path in (out_dir / "combined").glob("*.pdf")}
     if actual_combined != expected_combined:
         raise RuntimeError(
@@ -1485,7 +1490,10 @@ def run_combined_pdfs(
             suptitle_arrays=arrays_title,
             zscore_mua=zscore_mua,
         )
-    from analyze_stability.pref_unpref import write_comparison_pref_combined
+    from analyze_stability.pref_unpref import (
+        write_comparison_pref_combined,
+        write_paired_pref_session_combined,
+    )
 
     summaries_a = load_summaries_disk_cache(branch_a, condition_label_a, zscore_mua) or []
     summaries_b = load_summaries_disk_cache(branch_b, condition_label_b, zscore_mua) or []
@@ -1499,6 +1507,17 @@ def run_combined_pdfs(
         suptitle_grids=f"{channel_title} | pref vs unpref",
         suptitle_arrays=f"{arrays_title} | pref vs unpref",
     )
+    if spec.comparison_axis == "social_context":
+        write_paired_pref_session_combined(
+            summaries_a,
+            summaries_b,
+            out_dir / "combined",
+            file_tag=spec.file_tag,
+            label_a=spec.label_a,
+            label_b=spec.label_b,
+            suptitle=f"{channel_title} | Solo-locked pref | session mean then across sessions",
+            lock="solo",
+        )
 
 
 def run_level2_outputs(

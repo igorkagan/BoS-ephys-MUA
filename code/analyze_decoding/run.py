@@ -31,10 +31,16 @@ from analyze_decoding.io_cache import (
 )
 from analyze_decoding.paths import combined_dir, decoding_dir, session_decode_stem
 from analyze_decoding.plots import plot_combined_decode, plot_session_decode
-from analyze_decoding.session_decode import decode_session_intime
+from analyze_decoding.session_decode import decode_session_intime, enough_trials_per_side
 from analyze_decoding.targets import get_target
 from process_channels.preprocess import DUAL_NHP_GO_SEQS
 from run_pipeline.curated import discover_curated_sessions
+
+
+def _remove_session_decode_outputs(*paths: Path) -> None:
+    for path in paths:
+        if path.exists():
+            path.unlink()
 
 
 def _restrict_bins(sess: SessionDecodeData, max_bins: int) -> SessionDecodeData:
@@ -98,23 +104,38 @@ def _replot_branch(
     n_shuf: int,
     n_cv: int,
     smooth_ms: float = GAUSSIAN_SMOOTH_MS,
+    recording_monkey: str | None = None,
 ) -> Path:
     """Reload session npz (any layout with perf_mean), rewrite PDFs + combined clusters."""
     # target_name here is the output folder label (may differ from decode target key)
-    out_dir = decoding_dir(condition, go_seq, trial_type, target_name, figures_root=figures_root)
+    out_dir = decoding_dir(
+        condition,
+        go_seq,
+        trial_type,
+        target_name,
+        figures_root=figures_root,
+        recording_monkey=recording_monkey,
+    )
     results = []
     alignment_event = ""
     for sid in session_ids:
         npz_path = out_dir / f"{session_decode_stem(sid)}.npz"
+        pdf_path = out_dir / f"{session_decode_stem(sid)}.pdf"
         if not npz_path.exists():
             print(f"[replot skip] missing {npz_path.name}")
             continue
         result = load_session_result(npz_path)
+        if not enough_trials_per_side(result.n_left, result.n_right):
+            _remove_session_decode_outputs(npz_path, pdf_path)
+            print(
+                f"[replot skip] {sid}: L={result.n_left} R={result.n_right} "
+                f"(need ≥{MIN_TRIALS_PER_CONDITION}/side)"
+            )
+            continue
         # legacy null (n_bins, n_shuf) → leave cluster_mask empty unless time-locked
         if result.null.ndim == 2 and result.null.shape[0] == result.bin_centers_ms.size:
             # old layout: no valid session clusters
             result.cluster_mask = np.zeros(result.bin_centers_ms.shape, dtype=bool)
-        pdf_path = out_dir / f"{session_decode_stem(sid)}.pdf"
         plot_session_decode(
             result,
             pdf_path,
@@ -175,6 +196,7 @@ def run_decode_branch(
     max_bins: int | None = None,
     smooth_ms: float | None = None,
     session_parent: str | None = None,
+    recording_monkey: str | None = None,
 ) -> Path:
     """Run one timing × trial-type branch; return decoding output directory."""
     root = data_root if data_root is not None else default_curated_data_root()
@@ -202,9 +224,17 @@ def run_decode_branch(
             n_shuf=n_shuf,
             n_cv=n_cv,
             smooth_ms=smooth,
+            recording_monkey=recording_monkey,
         )
 
-    out_dir = decoding_dir(condition, go_seq, trial_type, folder, figures_root=figs)
+    out_dir = decoding_dir(
+        condition,
+        go_seq,
+        trial_type,
+        folder,
+        figures_root=figs,
+        recording_monkey=recording_monkey,
+    )
     out_dir.mkdir(parents=True, exist_ok=True)
     print(f"[out] {out_dir} (smooth_ms={smooth:g})")
 
@@ -230,6 +260,13 @@ def run_decode_branch(
             )
         ):
             result = load_session_result(npz_path)
+            if not enough_trials_per_side(result.n_left, result.n_right):
+                _remove_session_decode_outputs(npz_path, pdf_path)
+                print(
+                    f"  [skip] {sid}: L={result.n_left} R={result.n_right} "
+                    f"(need ≥{MIN_TRIALS_PER_CONDITION}/side)"
+                )
+                continue
             plot_session_decode(
                 result,
                 pdf_path,
@@ -259,9 +296,18 @@ def run_decode_branch(
                 smooth_ms=smooth,
                 zscore_mua=ZSCORE_MUA,
                 session_parent=session_parent,
+                recording_monkey=recording_monkey,
             )
         except (ValueError, FileNotFoundError) as exc:
+            _remove_session_decode_outputs(npz_path, pdf_path)
             print(f"  [skip] {sid}: {exc}")
+            continue
+        if not enough_trials_per_side(sess.n_left, sess.n_right):
+            _remove_session_decode_outputs(npz_path, pdf_path)
+            print(
+                f"  [skip] {sid}: L={sess.n_left} R={sess.n_right} "
+                f"(need ≥{MIN_TRIALS_PER_CONDITION}/side)"
+            )
             continue
         alignment_event = sess.alignment_event
         print(
@@ -288,6 +334,12 @@ def run_decode_branch(
 
         if not isinstance(result, SessionDecodeResult):
             raise RuntimeError("expected single-target SessionDecodeResult")
+        if not enough_trials_per_side(result.n_left, result.n_right) or np.all(
+            ~np.isfinite(result.perf_mean)
+        ):
+            _remove_session_decode_outputs(npz_path, pdf_path)
+            print(f"  [skip] {sid}: empty decode (L={result.n_left} R={result.n_right})")
+            continue
         save_session_result(
             npz_path,
             result,
@@ -356,6 +408,7 @@ def run_decode_curated(
     smooth_ms: float | None = None,
     session_ids: list[str] | None = None,
     session_parent: str | None = None,
+    recording_monkey: str | None = None,
 ) -> None:
     seqs = go_seqs if go_seqs is not None else DUAL_NHP_GO_SEQS
     for go_seq in seqs:
@@ -370,6 +423,7 @@ def run_decode_curated(
                 figures_root=figures_root,
                 session_ids=session_ids,
                 session_parent=session_parent,
+                recording_monkey=recording_monkey,
                 force=force,
                 validate_only=validate_only,
                 replot_only=replot_only,

@@ -8,7 +8,11 @@ from pathlib import Path
 
 import numpy as np
 
-from analyze_stability.plots_consistency import _deep_dive_subplot_grid, plot_deep_dive_channel
+from analyze_stability.plots_consistency import (
+    _deep_dive_subplot_grid,
+    plot_deep_dive_channel,
+    write_stability_csv,
+)
 from process_channels.features import ChannelSummary
 
 
@@ -69,6 +73,18 @@ class DeepDiveChannelPlotTests(unittest.TestCase):
                 out_path,
             )
             self.assertTrue(out_path.exists())
+
+
+class WriteStabilityCsvTests(unittest.TestCase):
+    def test_empty_stabilities_still_writes_header(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_path = Path(tmpdir) / "channel_stability.csv"
+            write_stability_csv([], out_path)
+            self.assertTrue(out_path.is_file())
+            text = out_path.read_text(encoding="utf-8")
+            self.assertIn("channel", text)
+            self.assertIn("stable", text)
+            self.assertGreaterEqual(len(text.strip().splitlines()), 1)
 
 
 if __name__ == "__main__":

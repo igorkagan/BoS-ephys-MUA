@@ -247,6 +247,7 @@ def run_choice_ab_grid(
     nshuffles: int | None = None,
     cross_validations: int | None = None,
     session_parent: str | None = None,
+    recording_monkey: str | None = None,
 ) -> Path:
     root = data_root or default_curated_data_root()
     figs = figures_root or FIGURES_ROOT
@@ -254,7 +255,14 @@ def run_choice_ab_grid(
     if max_sessions is not None:
         ids = ids[:max_sessions]
 
-    out_dir = decoding_dir(condition, go_seq, "Dyadic", "choice_ab_grid", figures_root=figs)
+    out_dir = decoding_dir(
+        condition,
+        go_seq,
+        "Dyadic",
+        "choice_ab_grid",
+        figures_root=figs,
+        recording_monkey=recording_monkey,
+    )
     out_dir.mkdir(parents=True, exist_ok=True)
     align_events = align_events_in_order(go_seq)
     n_shuf = NSHUFFLES if nshuffles is None else nshuffles
@@ -300,6 +308,7 @@ def run_choice_ab_grid(
                     smooth_ms=GAUSSIAN_SMOOTH_MS,
                     zscore_mua=ZSCORE_MUA,
                     session_parent=session_parent,
+                    recording_monkey=recording_monkey,
                 )
                 _fill_choice_ab_panels(
                     panels,
@@ -443,6 +452,7 @@ def run_same_diff_grid(
     nshuffles: int | None = None,
     cross_validations: int | None = None,
     session_parent: str | None = None,
+    recording_monkey: str | None = None,
 ) -> Path:
     root = data_root or default_curated_data_root()
     figs = figures_root or FIGURES_ROOT
@@ -450,7 +460,14 @@ def run_same_diff_grid(
     if max_sessions is not None:
         ids = ids[:max_sessions]
 
-    out_dir = decoding_dir(condition, go_seq, "Dyadic", "same_diff", figures_root=figs)
+    out_dir = decoding_dir(
+        condition,
+        go_seq,
+        "Dyadic",
+        "same_diff",
+        figures_root=figs,
+        recording_monkey=recording_monkey,
+    )
     out_dir.mkdir(parents=True, exist_ok=True)
     align_events = align_events_in_order(go_seq)
     n_shuf = NSHUFFLES if nshuffles is None else nshuffles
@@ -488,6 +505,7 @@ def run_same_diff_grid(
                     data_root=root,
                     alignment_event=event,
                     session_parent=session_parent,
+                    recording_monkey=recording_monkey,
                 )
                 sess = subset_for_conditions(
                     bundle, {"same_diff": ["same", "diff"]}, count_key="same_diff",
@@ -576,12 +594,14 @@ def run_dyadic_all_grids(
     cross_validations: int | None = None,
     session_ids: list[str] | None = None,
     session_parent: str | None = None,
+    recording_monkey: str | None = None,
 ) -> None:
     for go_seq in go_seqs:
         run_choice_ab_grid(
             condition, go_seq, balanced=False,
             data_root=data_root, figures_root=figures_root,
             session_ids=session_ids, session_parent=session_parent,
+            recording_monkey=recording_monkey,
             force=force, max_sessions=max_sessions,
             nshuffles=nshuffles, cross_validations=cross_validations,
         )
@@ -589,6 +609,7 @@ def run_dyadic_all_grids(
             condition, go_seq, balanced=True,
             data_root=data_root, figures_root=figures_root,
             session_ids=session_ids, session_parent=session_parent,
+            recording_monkey=recording_monkey,
             force=force, max_sessions=max_sessions,
             nshuffles=nshuffles, cross_validations=cross_validations,
         )
@@ -596,6 +617,7 @@ def run_dyadic_all_grids(
             condition, go_seq,
             data_root=data_root, figures_root=figures_root,
             session_ids=session_ids, session_parent=session_parent,
+            recording_monkey=recording_monkey,
             force=force, max_sessions=max_sessions,
             nshuffles=nshuffles, cross_validations=cross_validations,
         )

@@ -97,6 +97,14 @@ def _decode_bin(
     return out
 
 
+def enough_trials_per_side(
+    n_left: int,
+    n_right: int,
+    min_trials: int = MIN_TRIALS_PER_CONDITION,
+) -> bool:
+    return int(n_left) >= min_trials and int(n_right) >= min_trials
+
+
 def _empty_result(
     sess: SessionDecodeData,
     target_key: str,
@@ -159,9 +167,7 @@ def decode_session_intime(
     centers = sess.bin_centers_ms
     n_bins = centers.size
 
-    # min trials: for multi-var Decodanda needs enough per condition cell;
-    # gate on n_left/n_right of primary when provided
-    if sess.n_left < min_trials_per_condition or sess.n_right < min_trials_per_condition:
+    if not enough_trials_per_side(sess.n_left, sess.n_right, min_trials_per_condition):
         if multi:
             return {k: _empty_result(sess, k, n_bins, nshuffles, balanced=balanced) for k in keys}
         return _empty_result(sess, keys[0], n_bins, nshuffles, balanced=False)

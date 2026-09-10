@@ -3,6 +3,10 @@
 Does not replace L/R plots. Preference is defined within each session
 (``pref_side``); it is never carried across sessions or trial-pooled.
 Writes into the same ``combined/`` folders as L/R.
+
+Paired Dyadic vs Solo overlays can lock ``pref_side`` to Solo MWU, keep
+sessions present in both caches, average all gated channels within a
+session, then mean ± SEM across those sessions.
 """
 
 from __future__ import annotations
@@ -10,6 +14,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Iterable, Literal
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -22,11 +27,12 @@ from compare_conditions.plots_comparison import (
     ARRAYS_COMBINED_FIG_IN,
     PDF_DPI,
     TIMING_LEGEND_BOTTOM,
+    _timing_deep_dive_subplot_grid,
     plot_timing_mean_se,
     validate_figure_legends_inside_canvas,
 )
 from load_data.io import ARRAY_NAMES, array_nominal_channels, channel_label, filter_summary
-from load_data.io import window_indices
+from load_data.io import session_sort_key, window_indices
 from process_channels.features import ChannelSummary
 from process_channels.preprocess import processing_label, resolve_condition_output_dir
 from run_pipeline.context import PipelineContext, apply_pipeline_context
@@ -37,6 +43,12 @@ UNPREF_COLOR = "#7f7f7f"
 COMBINED_SUBDIR = "combined"
 
 
+LockSource = Literal["solo", "dyadic"]
+SESSIONS_COMBINED_LOCKED = "sessions_combined_pref_solo_locked"
+SESSIONS_LOCKED = "sessions_pref_solo_locked"
+SESSIONS_MEAN_LOCKED = "sessions_mean_pref_solo_locked"
+
+
 @dataclass(frozen=True)
 class PrefUnprefTrace:
     mean_pref: np.ndarray
@@ -45,6 +57,33 @@ class PrefUnprefTrace:
     sem_unpref: np.ndarray
     n_sessions: int
     t_ms: np.ndarray
+
+
+@dataclass(frozen=True)
+class LockedSessionTrace:
+    session_id: str
+    n_channels: int
+    t_ms: np.ndarray
+    mean_pref_a: np.ndarray
+    mean_unpref_a: np.ndarray
+    mean_pref_b: np.ndarray
+    mean_unpref_b: np.ndarray
+
+
+@dataclass(frozen=True)
+class LockedGrandMean:
+    t_ms: np.ndarray
+    n_sessions: int
+    n_channels: tuple[int, ...]
+    session_ids: tuple[str, ...]
+    mean_pref_a: np.ndarray
+    sem_pref_a: np.ndarray
+    mean_unpref_a: np.ndarray
+    sem_unpref_a: np.ndarray
+    mean_pref_b: np.ndarray
+    sem_pref_b: np.ndarray
+    mean_unpref_b: np.ndarray
+    sem_unpref_b: np.ndarray
 
 
 def is_tuned(summary: ChannelSummary, *, alpha: float = MWU_ALPHA) -> bool:
@@ -64,9 +103,19 @@ def pref_unpref_means(
     """Return (pref, unpref) mean PSTHs, or None if not gated."""
     if not is_tuned(summary, alpha=alpha):
         return None
-    if summary.pref_side == "L":
+    return remap_pref_unpref(summary, summary.pref_side)
+
+
+def remap_pref_unpref(
+    summary: ChannelSummary,
+    pref_side: str,
+) -> tuple[np.ndarray, np.ndarray] | None:
+    """Map L/R PSTHs onto pref/unpref using an explicit side."""
+    if pref_side == "L":
         return np.asarray(summary.mean_left, dtype=float), np.asarray(summary.mean_right, dtype=float)
-    return np.asarray(summary.mean_right, dtype=float), np.asarray(summary.mean_left, dtype=float)
+    if pref_side == "R":
+        return np.asarray(summary.mean_right, dtype=float), np.asarray(summary.mean_left, dtype=float)
+    return None
 
 
 def mean_trace_stack(traces: list[np.ndarray]) -> np.ndarray:
@@ -216,6 +265,119 @@ def comparison_combined_pref_filenames(file_tag: str) -> list[str]:
     names = [f"{file_tag}_{array_name}_combined_pref.pdf" for array_name in ARRAY_NAMES]
     names.append(f"arrays_{file_tag}_combined_pref.pdf")
     return names
+
+
+def comparison_solo_locked_pref_filenames(file_tag: str) -> list[str]:
+    return [
+        f"{file_tag}_{SESSIONS_COMBINED_LOCKED}.pdf",
+        f"{file_tag}_{SESSIONS_LOCKED}.pdf",
+        f"{file_tag}_{SESSIONS_MEAN_LOCKED}.pdf",
+    ]
+
+
+def _by_session_channel(
+    summaries: list[ChannelSummary],
+) -> dict[str, dict[int, ChannelSummary]]:
+    nested: dict[str, dict[int, ChannelSummary]] = defaultdict(dict)
+    for summary in summaries:
+        nested[summary.session_id][int(summary.channel)] = summary
+    return nested
+
+
+def paired_session_ids(
+    summaries_a: list[ChannelSummary],
+    summaries_b: list[ChannelSummary],
+) -> list[str]:
+    ids_a = {summary.session_id for summary in summaries_a}
+    ids_b = {summary.session_id for summary in summaries_b}
+    return sorted(ids_a & ids_b)
+
+
+def locked_session_traces(
+    summaries_a: list[ChannelSummary],
+    summaries_b: list[ChannelSummary],
+    *,
+    lock: LockSource = "solo",
+    alpha: float = MWU_ALPHA,
+    channels: Iterable[int] | None = None,
+) -> list[LockedSessionTrace]:
+    """Equal-weight channel mean per paired session, pref locked to ``lock``.
+
+    ``summaries_a`` is Dyadic, ``summaries_b`` is Solo. A session×channel is
+    kept when both caches have it and the lock source is MWU-tuned. The lock
+    ``pref_side`` remaps both PSTHs. ``channels`` restricts the pool (array).
+    """
+    nest_a = _by_session_channel(summaries_a)
+    nest_b = _by_session_channel(summaries_b)
+    allowed = None if channels is None else {int(ch) for ch in channels}
+    traces: list[LockedSessionTrace] = []
+    for session_id in paired_session_ids(summaries_a, summaries_b):
+        prefs_a: list[np.ndarray] = []
+        unprefs_a: list[np.ndarray] = []
+        prefs_b: list[np.ndarray] = []
+        unprefs_b: list[np.ndarray] = []
+        t_ms = None
+        chans = set(nest_a[session_id]) & set(nest_b[session_id])
+        if allowed is not None:
+            chans &= allowed
+        for channel in sorted(chans):
+            row_a = nest_a[session_id][channel]
+            row_b = nest_b[session_id][channel]
+            source = row_b if lock == "solo" else row_a
+            if not is_tuned(source, alpha=alpha):
+                continue
+            pair_a = remap_pref_unpref(row_a, source.pref_side)
+            pair_b = remap_pref_unpref(row_b, source.pref_side)
+            if pair_a is None or pair_b is None:
+                continue
+            prefs_a.append(pair_a[0])
+            unprefs_a.append(pair_a[1])
+            prefs_b.append(pair_b[0])
+            unprefs_b.append(pair_b[1])
+            if t_ms is None:
+                t_ms = np.asarray(row_a.t_ms, dtype=float)
+        mean_pa = equal_weight_mean(prefs_a)
+        mean_ua = equal_weight_mean(unprefs_a)
+        mean_pb = equal_weight_mean(prefs_b)
+        mean_ub = equal_weight_mean(unprefs_b)
+        if t_ms is None or mean_pa is None or mean_ua is None or mean_pb is None or mean_ub is None:
+            continue
+        traces.append(
+            LockedSessionTrace(
+                session_id=session_id,
+                n_channels=len(prefs_a),
+                t_ms=t_ms,
+                mean_pref_a=mean_pa,
+                mean_unpref_a=mean_ua,
+                mean_pref_b=mean_pb,
+                mean_unpref_b=mean_ub,
+            )
+        )
+    return traces
+
+
+def grand_from_locked_sessions(traces: list[LockedSessionTrace]) -> LockedGrandMean | None:
+    if not traces:
+        return None
+    t_ms = np.asarray(traces[0].t_ms, dtype=float)
+    mean_pa, sem_pa = mean_and_sem(mean_trace_stack([row.mean_pref_a for row in traces]))
+    mean_ua, sem_ua = mean_and_sem(mean_trace_stack([row.mean_unpref_a for row in traces]))
+    mean_pb, sem_pb = mean_and_sem(mean_trace_stack([row.mean_pref_b for row in traces]))
+    mean_ub, sem_ub = mean_and_sem(mean_trace_stack([row.mean_unpref_b for row in traces]))
+    return LockedGrandMean(
+        t_ms=t_ms,
+        n_sessions=len(traces),
+        n_channels=tuple(row.n_channels for row in traces),
+        session_ids=tuple(row.session_id for row in traces),
+        mean_pref_a=mean_pa,
+        sem_pref_a=sem_pa,
+        mean_unpref_a=mean_ua,
+        sem_unpref_a=sem_ua,
+        mean_pref_b=mean_pb,
+        sem_pref_b=sem_pb,
+        mean_unpref_b=mean_ub,
+        sem_unpref_b=sem_ub,
+    )
 
 
 def _t_ms_from_summaries(*groups: list[ChannelSummary]) -> np.ndarray | None:
@@ -535,3 +697,184 @@ def write_comparison_pref_combined(
     plt.close(fig)
     print(f"pref_unpref comparison combined -> {combined_dir}")
     return combined_dir
+
+
+def _nch_label(n_channels: tuple[int, ...]) -> str:
+    if not n_channels:
+        return "nCh=0"
+    mean_n = float(np.mean(n_channels))
+    return f"nSess={len(n_channels)}  mean nCh={mean_n:.1f}"
+
+
+def _plot_locked_overlay(
+    ax,
+    t_ms: np.ndarray,
+    grand: LockedGrandMean | None,
+    win_idx: np.ndarray,
+    title: str,
+) -> None:
+    if grand is None:
+        mark_empty_axis(ax, title, "n.s.")
+        return
+    plot_timing_mean_se(ax, t_ms, grand.mean_pref_a, grand.sem_pref_a, PREF_COLOR, linestyle="-")
+    plot_timing_mean_se(ax, t_ms, grand.mean_unpref_a, grand.sem_unpref_a, UNPREF_COLOR, linestyle="-")
+    plot_timing_mean_se(ax, t_ms, grand.mean_pref_b, grand.sem_pref_b, PREF_COLOR, linestyle="--")
+    plot_timing_mean_se(ax, t_ms, grand.mean_unpref_b, grand.sem_unpref_b, UNPREF_COLOR, linestyle="--")
+    if win_idx.size:
+        ax.axvspan(t_ms[win_idx[0]], t_ms[win_idx[-1]], color="0.85", alpha=0.35, zorder=0)
+    ax.axvline(0, color="0.5", linewidth=0.6, linestyle="--")
+    ax.set_title(title, fontsize=9)
+    ax.text(
+        0.02, 0.98, _nch_label(grand.n_channels),
+        transform=ax.transAxes, va="top", ha="left", fontsize=6,
+        bbox=dict(boxstyle="round,pad=0.2", facecolor="white", alpha=0.8, edgecolor="none"),
+    )
+    ax.tick_params(labelsize=6)
+    ax.set_xlim(float(t_ms[0]), float(t_ms[-1]))
+
+
+def _save_locked_npz(
+    path: Path,
+    traces: list[LockedSessionTrace],
+    grand: LockedGrandMean,
+    *,
+    lock: LockSource,
+    alpha: float,
+) -> None:
+    payload = {
+        "lock": np.array(lock),
+        "alpha": np.array(alpha, dtype=float),
+        "t_ms": grand.t_ms,
+        "session_ids": np.array(grand.session_ids, dtype=object),
+        "n_channels": np.asarray(grand.n_channels, dtype=int),
+        "mean_pref_a": grand.mean_pref_a,
+        "sem_pref_a": grand.sem_pref_a,
+        "mean_unpref_a": grand.mean_unpref_a,
+        "sem_unpref_a": grand.sem_unpref_a,
+        "mean_pref_b": grand.mean_pref_b,
+        "sem_pref_b": grand.sem_pref_b,
+        "mean_unpref_b": grand.mean_unpref_b,
+        "sem_unpref_b": grand.sem_unpref_b,
+        "session_pref_a": mean_trace_stack([row.mean_pref_a for row in traces]),
+        "session_unpref_a": mean_trace_stack([row.mean_unpref_a for row in traces]),
+        "session_pref_b": mean_trace_stack([row.mean_pref_b for row in traces]),
+        "session_unpref_b": mean_trace_stack([row.mean_unpref_b for row in traces]),
+    }
+    np.savez_compressed(path, **payload)
+
+
+def write_paired_pref_session_combined(
+    summaries_a: list[ChannelSummary],
+    summaries_b: list[ChannelSummary],
+    combined_dir: Path,
+    *,
+    file_tag: str,
+    label_a: str,
+    label_b: str,
+    suptitle: str,
+    lock: LockSource = "solo",
+    alpha: float = MWU_ALPHA,
+) -> Path:
+    """Session-first Solo-locked overlay: all gated channels, then sessions."""
+    combined_dir.mkdir(parents=True, exist_ok=True)
+    t_ms = _t_ms_from_summaries(summaries_a, summaries_b)
+    all_traces = locked_session_traces(
+        summaries_a, summaries_b, lock=lock, alpha=alpha,
+    )
+    grand_all = grand_from_locked_sessions(all_traces)
+    if t_ms is None:
+        t_ms = np.linspace(-1000.0, 1000.0, 2001)
+    win_idx = window_indices(t_ms, ANALYSIS_WINDOW_MS)
+    meta = (
+        f"pref from {lock} MWU p<{alpha} | paired sessions | "
+        f"equal-weight channels within session | mean ± SEM across sessions"
+    )
+
+    panel_specs: list[tuple[str, LockedGrandMean | None]] = [("All", grand_all)]
+    for array_index, array_name in enumerate(ARRAY_NAMES):
+        traces = locked_session_traces(
+            summaries_a, summaries_b, lock=lock, alpha=alpha,
+            channels=array_nominal_channels(array_index),
+        )
+        panel_specs.append((array_name, grand_from_locked_sessions(traces)))
+
+    fig, axes = plt.subplots(
+        1, len(panel_specs), figsize=(16.5, 4.5), sharex=True, sharey=False,
+    )
+    for i, (ax, (title, grand)) in enumerate(zip(np.atleast_1d(axes), panel_specs)):
+        _plot_locked_overlay(ax, t_ms, grand, win_idx, title)
+        if i == 0:
+            ax.set_ylabel("MUA (z)", fontsize=8)
+    configure_array_time_axis(axes, t_ms)
+    fig.suptitle(f"{suptitle}\n{meta}", fontsize=10, y=0.98)
+    fig.subplots_adjust(left=0.05, right=0.98, top=0.78, bottom=TIMING_LEGEND_BOTTOM, wspace=0.32)
+    _add_pref_overlay_legend(fig, label_a, label_b)
+    validate_figure_legends_inside_canvas(fig)
+    out_grand = combined_dir / f"{file_tag}_{SESSIONS_COMBINED_LOCKED}.pdf"
+    fig.savefig(out_grand, format="pdf", dpi=PDF_DPI, bbox_inches="tight", pad_inches=0.05)
+    plt.close(fig)
+
+    fig, ax = plt.subplots(figsize=(8.0, 5.0))
+    _plot_locked_overlay(ax, t_ms, grand_all, win_idx, "All channels")
+    ax.set_ylabel("MUA (z)", fontsize=8)
+    configure_array_time_axis(np.array([ax]), t_ms)
+    fig.suptitle(
+        f"{suptitle} | mean of per-session all-channel traces\n{meta}",
+        fontsize=10, y=0.98,
+    )
+    fig.subplots_adjust(left=0.12, right=0.97, top=0.82, bottom=0.22)
+    _add_pref_overlay_legend(fig, label_a, label_b)
+    validate_figure_legends_inside_canvas(fig)
+    out_mean = combined_dir / f"{file_tag}_{SESSIONS_MEAN_LOCKED}.pdf"
+    fig.savefig(out_mean, format="pdf", dpi=PDF_DPI, bbox_inches="tight", pad_inches=0.05)
+    plt.close(fig)
+
+    n_sess = len(all_traces)
+    nrows, ncols, figsize = _timing_deep_dive_subplot_grid(max(n_sess, 1))
+    fig, axes = plt.subplots(nrows, ncols, figsize=figsize, sharex=True, sharey=False)
+    axes_flat = np.atleast_1d(axes).ravel()
+    if n_sess == 0:
+        mark_empty_axis(axes_flat[0], "no paired sessions", "n.s.")
+        for ax in axes_flat[1:]:
+            ax.axis("off")
+    else:
+        for i, ax in enumerate(axes_flat):
+            if i >= n_sess:
+                ax.axis("off")
+                continue
+            row = all_traces[i]
+            ax.plot(row.t_ms, row.mean_pref_a, color=PREF_COLOR, linewidth=1.2, linestyle="-")
+            ax.plot(row.t_ms, row.mean_unpref_a, color=UNPREF_COLOR, linewidth=1.2, linestyle="-")
+            ax.plot(row.t_ms, row.mean_pref_b, color=PREF_COLOR, linewidth=1.2, linestyle="--")
+            ax.plot(row.t_ms, row.mean_unpref_b, color=UNPREF_COLOR, linewidth=1.2, linestyle="--")
+            if win_idx.size:
+                ax.axvspan(row.t_ms[win_idx[0]], row.t_ms[win_idx[-1]], color="0.85", alpha=0.35, zorder=0)
+            ax.axvline(0, color="0.5", linewidth=0.6, linestyle="--")
+            ax.set_title(f"{session_sort_key(row.session_id)}  nCh={row.n_channels}", fontsize=8)
+            ax.tick_params(labelsize=6)
+            ax.set_xlim(float(row.t_ms[0]), float(row.t_ms[-1]))
+            if i % ncols == 0:
+                ax.set_ylabel("MUA (z)", fontsize=7)
+        configure_array_time_axis(axes, t_ms)
+    fig.suptitle(f"{suptitle} | per session (all gated channels)\n{meta}", fontsize=10, y=0.98)
+    fig.subplots_adjust(left=0.05, right=0.98, top=0.86, bottom=0.16, wspace=0.28, hspace=0.45)
+    _add_pref_overlay_legend(fig, label_a, label_b)
+    validate_figure_legends_inside_canvas(fig)
+    out_sess = combined_dir / f"{file_tag}_{SESSIONS_LOCKED}.pdf"
+    fig.savefig(out_sess, format="pdf", dpi=PDF_DPI, bbox_inches="tight", pad_inches=0.05)
+    plt.close(fig)
+
+    if grand_all is not None:
+        _save_locked_npz(
+            combined_dir / f"{file_tag}_{SESSIONS_MEAN_LOCKED}.npz",
+            all_traces,
+            grand_all,
+            lock=lock,
+            alpha=alpha,
+        )
+    print(
+        f"pref_unpref solo-locked session mean "
+        f"(n_sessions={n_sess}) -> {combined_dir}"
+    )
+    return combined_dir
+

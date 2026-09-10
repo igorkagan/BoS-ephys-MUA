@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import csv
-from dataclasses import asdict
+from dataclasses import asdict, fields
 from pathlib import Path
 
 from analyze_stability.plots_lr import annotate_task_evoked_text, configure_array_time_axis, task_evoked_annotation_text
@@ -442,13 +442,10 @@ def write_stability_csv(
     out_path: Path,
     tuned_stable: list[ChannelStability] | None = None,
 ) -> None:
-    if not stabilities:
-        return
-    rank_map = {}
+    fieldnames = [f.name for f in fields(ChannelStability)]
+    rank_map: dict[int, int] = {}
     if tuned_stable:
         rank_map = {s.channel: i + 1 for i, s in enumerate(tuned_stable)}
-    fieldnames = list(asdict(stabilities[0]).keys())
-    if rank_map:
         fieldnames = fieldnames + ["tuned_stable_rank"]
     with out_path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)

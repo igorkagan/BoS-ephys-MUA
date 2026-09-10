@@ -319,15 +319,13 @@ class PipelineCacheTests(unittest.TestCase):
         mock_time,
         mock_labels,
     ) -> None:
-        mock_loadmat.side_effect = lambda _path: _make_mua()
+        mock_loadmat.side_effect = lambda _path: _make_mua(n_trials=12)
         labels = {
-            "A_LR_pos_list": np.array(["Al", "Al", "Al", "Ar", "Ar", "Ar"]),
-            "TrialSubType_list": np.array(["Dyadic"] * 6),
-            "go_seq_500_list": np.array(
-                ["AgoB", "AgoB", "AgoB", "BgoA", "BgoA", "BgoA"],
-            ),
-            "conf_predictability_list": np.array(["Blocked"] * 6),
-            "A_Reward_list": np.array(["RA1"] * 6),
+            "A_LR_pos_list": np.array(["Al", "Al", "Al", "Ar", "Ar", "Ar"] * 2),
+            "TrialSubType_list": np.array(["Dyadic"] * 12),
+            "go_seq_500_list": np.array(["AgoB"] * 6 + ["BgoA"] * 6),
+            "conf_predictability_list": np.array(["Blocked"] * 12),
+            "A_Reward_list": np.array(["RA1"] * 12),
         }
         branch_specs = [
             TrialBranchSpec(
@@ -435,7 +433,7 @@ class PipelineCacheTests(unittest.TestCase):
         mock_time,
         mock_labels,
     ) -> None:
-        mock_loadmat.side_effect = lambda _path: _make_mua()
+        mock_loadmat.side_effect = lambda _path: _make_mua(n_trials=12)
 
         dyadic_filters = {
             "TrialSubType_list": ["Dyadic"],
@@ -466,13 +464,11 @@ class PipelineCacheTests(unittest.TestCase):
             )
             t_ms, _ = self._setup_session_tree(ctx, [1, 2])
             labels = {
-                "A_LR_pos_list": np.array(["Al", "Al", "Al", "Al", "Al", "Al"]),
-                "TrialSubType_list": np.array(
-                    ["Dyadic", "Dyadic", "Dyadic", "SoloA", "SoloA", "SoloA"],
-                ),
-                "go_seq_500_list": np.array(["AgoB"] * 6),
-                "conf_predictability_list": np.array(["Blocked"] * 6),
-                "A_Reward_list": np.array(["RA1"] * 6),
+                "A_LR_pos_list": np.array(["Al", "Al", "Al", "Ar", "Ar", "Ar"] * 2),
+                "TrialSubType_list": np.array(["Dyadic"] * 6 + ["SoloA"] * 6),
+                "go_seq_500_list": np.array(["AgoB"] * 12),
+                "conf_predictability_list": np.array(["Blocked"] * 12),
+                "A_Reward_list": np.array(["RA1"] * 12),
             }
             mock_time.return_value = t_ms
             mock_labels.return_value = labels

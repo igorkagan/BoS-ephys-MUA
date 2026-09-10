@@ -338,7 +338,10 @@ def make_session_array_figure(
         title = channel_label(ch_num, array_name, panel_idx + 1)
         ch_path = channel_paths.get(ch_num)
 
-        if cached_trials is not None and ch_num in cached_trials:
+        if cached_trials is not None:
+            if ch_num not in cached_trials:
+                mark_empty_axis(ax, title, "no data")
+                continue
             left_trials, right_trials = cached_trials[ch_num]
         elif ch_path is None:
             mark_empty_axis(ax, title, "missing")
@@ -354,7 +357,9 @@ def make_session_array_figure(
                 zscore_reference=zscore_reference,
             )
 
-        if left_trials.size == 0 and right_trials.size == 0:
+        n_left = 0 if left_trials.size == 0 else int(left_trials.shape[0])
+        n_right = 0 if right_trials.size == 0 else int(right_trials.shape[0])
+        if n_left < min_trials or n_right < min_trials:
             mark_empty_axis(ax, title, "no data")
             continue
 

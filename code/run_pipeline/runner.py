@@ -600,6 +600,20 @@ def _write_pref_comparison_suites(
                 f"{title} | array mean ± SE | {alignment} | pref vs unpref"
             ),
         )
+        if spec.comparison_axis == "social_context":
+            pu.write_paired_pref_session_combined(
+                summaries_a,
+                summaries_b,
+                combined_dir,
+                file_tag=spec.file_tag,
+                label_a=spec.label_a,
+                label_b=spec.label_b,
+                suptitle=(
+                    f"{title} | Solo-locked pref | session mean then across sessions | "
+                    f"{alignment}"
+                ),
+                lock="solo",
+            )
 
     if include_solo:
         for seq, ctx in by_seq.items():

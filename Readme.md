@@ -1,6 +1,25 @@
-# Curated MUA data layout
+# BoS-ephys-MUA
 
-Base folder for the curated MUA data:
+Event-aligned multiunit activity from Elmo and Curius in a dyadic choice task.
+
+**Docs:** [wiki](https://github.com/igorkagan/BoS-ephys-MUA/wiki) — commands, output trees, z-score, pref, decode, comparisons.
+
+| Dataset | Raw sessions | Figures |
+|---|---|---|
+| Curated | `MUA_curated_sessions/{Monkey}_{BLOCKED\|SHUFFLED}/{session_id}/` | `figures/{CONDITION}/` |
+| Export lists | `{root_folder}/{session_id}/` (`session_lists.m`) | `{root_folder}/{list_name}/` |
+
+```bash
+conda activate bos-ephys
+PYTHONPATH=code python -u code/run_scripts/run_curated.py Elmo_BLOCKED
+PYTHONPATH=code python -u code/run_scripts/run_session_list.py Elmo_BLOCKED_CONF
+```
+
+---
+
+# Session files
+
+Curated data root:
 
 ```
 S:\taskcontroller\SCP_DATA\SCP-CTRL-01\MUA_curated_sessions
@@ -53,7 +72,7 @@ Per-channel averaged MUA timecourses across different trial subsets, e.g.:
 MUA.20210401T124246.A_Elmo.B_KN.SCP_01.Elmo.A.statistic_summary_table.mat
 ```
 
-These are secondary to the event-aligned data below; use them for summary plots, not primary trial-by-trial parsing.
+Averaged timecourses for quick look-plots. Trial-by-trial work uses the event-aligned files below.
 
 ### Event-aligned MUA data
 
@@ -107,7 +126,7 @@ Combine boolean masks over the label lists to select trial subsets. Row indices 
 
 ### Pipeline rule (all runners)
 
-L/R choice and dyadic reward tiers follow **actor side from the session ID**, not the recorded monkey's name. Implemented in [`code/process_channels/preprocess.py`](code/process_channels/preprocess.py):
+L/R choice and dyadic reward tiers follow **actor side from the session ID** ([`code/process_channels/preprocess.py`](code/process_channels/preprocess.py)):
 
 | Actor side | Session ID pattern | L/R field | Left / right labels | Dyadic reward field |
 |---|---|---|---|---|
@@ -116,7 +135,7 @@ L/R choice and dyadic reward tiers follow **actor side from the session ID**, no
 
 `recording_actor_side(session_id, recording_monkey)` parses the ID; `choice_config_for_recording(...)` and `trial_filters_for_go_seq(..., actor_side)` build masks. Solo branches use the same actor side for reward tiers and output subdirs (`SoloA` / `SoloB`).
 
-Example: Elmo recorded in `20210401T124246.A_Elmo.B_KN.SCP_01` is actor **A** → `A_LR_pos_list` and `A_Reward_list`, not B-side fields.
+Example: Elmo in `20210401T124246.A_Elmo.B_KN.SCP_01` is actor **A** → `A_LR_pos_list` and `A_Reward_list`.
 
 Audit per-session counts (correct vs legacy monkey-name choice):
 
@@ -209,7 +228,7 @@ mua_sel = mua[blocked_dyadic_rewarded_monkeyfirst & row_ok]
 
 ## Ubuntu 20.04 (Python environment)
 
-Ubuntu 20.04 ships **Python 3.8** as `/usr/bin/python3`. That is too old for this repo (CI tests **3.12+**; some code uses 3.10+ syntax such as `zip(..., strict=True)`). **Do not replace or remove the system Python** — apt and OS tools depend on it.
+Ubuntu 20.04’s `/usr/bin/python3` is 3.8; this repo needs **3.12+**. Leave the system Python in place (apt depends on it) and use conda:
 
 Recommended setup on lab machines: install **Miniforge** in your home directory and use a dedicated conda env. No `sudo` required; system Python stays untouched.
 
@@ -273,12 +292,16 @@ BoS-ephys-MUA/
   code/
     load_data/             # I/O, session lists, disk cache, audit
     process_channels/      # preprocess, features, evoked
-    analyze_stability/     # consistency, combine, arrays, temporal
+    analyze_decoding/      # Decodanda (run_decode_*.py)
+    analyze_stability/     # consistency, combine, arrays, pref_unpref, temporal
     compare_conditions/    # condition-vs-condition comparison PDFs
     run_pipeline/          # unified runner (curated + session-list)
     run_scripts/           # CLIs (_bootstrap.py adds repo + code/ to sys.path)
       run_curated.py
       run_session_list.py
+      run_decode_curated.py
+      run_decode_session_list.py
+      run_decode_compare.py
       run_session_lr.py    # partial reruns (one step each)
       run_consistency.py
       run_combine.py
@@ -300,250 +323,113 @@ BoS-ephys-MUA/
 | Data I/O, session lists, cache | `code/load_data/` |
 | Channel preprocessing & features | `code/process_channels/` |
 | Cross-session stability & combine | `code/analyze_stability/` |
+| Decoding | `code/analyze_decoding/` |
 | Condition comparisons | `code/compare_conditions/` |
 | Pipeline orchestration | `code/run_pipeline/runner.py` |
 | What you execute | `code/run_scripts/*.py` |
+| Extended docs | [wiki](https://github.com/igorkagan/BoS-ephys-MUA/wiki) |
 
 ---
 
 ## Analysis pipeline
 
-Curated and session-list runs share **one engine** ([`code/run_pipeline/runner.py`](code/run_pipeline/runner.py)): branched dyadic/solo loads, disk cache, and explicit comparisons. They differ only in **how sessions are collected**:
+Same engine for both datasets: [`code/run_pipeline/runner.py`](code/run_pipeline/runner.py). Folder trees, z-score, pref, decode: [wiki](https://github.com/igorkagan/BoS-ephys-MUA/wiki).
 
-| | **Curated** | **Session-list (`session_lists.m`)** |
+| | Curated | Export lists (`session_lists.m`) |
 |---|---|---|
-| **Runner** | [`code/run_scripts/run_curated.py`](code/run_scripts/run_curated.py) | [`code/run_scripts/run_session_list.py`](code/run_scripts/run_session_list.py) |
-| **Data root** | `MUA_curated_sessions/{Monkey}_{BLOCKED\|SHUFFLED}/` | `root_folder` in `session_lists.m` (flat `{session_id}/` folders) |
-| **Sessions** | All subdirs under condition folder | Explicit list in named cell array |
-| **Typical lists** | `Curius_BLOCKED`, `Elmo_SHUFFLED`, … | `DUAL_NHP`, `Elmo_BLOCKED_CONF`, … |
+| Command | `run_curated.py Elmo_BLOCKED` | `run_session_list.py Elmo_BLOCKED_CONF` |
+| Sessions | Every subdir under the condition folder | Named cell array |
+| Writes | `figures/{CONDITION}/` | `{root_folder}/{list_name}/` |
 
-### Pipeline steps (default: all)
+Inner layout is the same: `{Monkey}_{AgoB|BgoA}/{Dyadic|SoloA}/` plus `{Monkey}_Dyadic_first_second_comparison/` and `{Monkey}_{go}/Dyadic_vs_SoloA_comparison/`. Plot colors: **left = red**, **right = blue**. Log: `{output_root}/pipeline.log`.
 
-| Step | Module | Curated output | DUAL_NHP / confederate flat-list output |
-|---|---|---|---|
-| `session_lr` | `code/analyze_stability/session_lr.py` | `figures/{CONDITION}/{Monkey}_{AgoB\|BgoA}/Dyadic/` (or `SoloA`/`SoloB`) | `{output}/{Monkey}_{AgoB\|BgoA}/Dyadic/` |
-| `consistency` | `code/analyze_stability/consistency.py` | `…/Dyadic/consistency/` | `{output}/…/Dyadic/consistency/` |
-| `stability_across_sessions` | `code/analyze_stability/stability_across_sessions.py` | `…/Dyadic/stability_across_sessions/` | same pattern |
-| `combine` | `code/analyze_stability/combine.py` | `…/Dyadic/combined/` | `{output}/…/Dyadic/combined/` |
-| `array_combined` | `code/analyze_stability/arrays.py` | same `…/combined/` (array-mean ± SE) | `{output}/…/combined/*_arrays_combined_LR.pdf` |
-| `best_worst` | `code/analyze_stability/deep_dives.py` | deep dives under `…/consistency/` | deep dives under `…/consistency/` |
-| `comparisons` | `code/compare_conditions/compare.py` | `figures/{CONDITION}/{Monkey}_Dyadic_first_second_comparison/` plus fixed-go-sequence social comparisons | Same relative comparison tree under `{root}/{list}/` |
-
-Steps always run in table order. Pass a subset with `--steps`, e.g. `--steps session_lr,consistency`, or use a partial runner: `python -u code/run_scripts/run_consistency.py Curius_BLOCKED`.
-
-**Z-scoring:** per channel, μ/σ from **actor trials** only (Dyadic + that monkey's active solos; see [`code/process_channels/preprocess.py`](code/process_channels/preprocess.py) `zscore_reference_mask`), then apply analysis trial masks and smoothing. Transform is applied to all finite samples in the matrix.
-
-**Run log:** curated and session-list runners tee stdout/stderr to `{output_root}/pipeline.log` via [`code/run_pipeline/run_log.py`](code/run_pipeline/run_log.py) (e.g. `figures/Elmo_BLOCKED/pipeline.log`, `{root}/DUAL_NHP/pipeline.log`).
-
-**Pipeline data cache:** [`code/run_pipeline/runner.py`](code/run_pipeline/runner.py) builds a `RunDataCache` once per go-seq run. Each channel `.mat` is loaded **once** per `(session, channel)`; z-scored summaries/trials are derived in memory by default (`RUN_BOTH_PROCESSING=False` in [`code/run_pipeline/config.py`](code/run_pipeline/config.py)). Pass `--also-original` to also emit raw outputs under `original/` (with z-scored under `zscored/`). Disk snapshots land in `{branch}/.cache/summaries_{raw|zscore}.npz` for comparisons. `best_worst` is skipped when `consistency` ran.
-
-Plot colors: **left = red**, **right = blue**.
-
----
-
-### Curated pipeline — `code/run_scripts/run_curated.py`
-
-**Sessions are not listed in the runner.** Every subdirectory under the condition folder is processed (`discover_sessions` in [`code/load_data/io.py`](code/load_data/io.py)), sorted by date prefix in the session ID.
-
-Each condition runs **two go-seq splits** (`Elmo_AgoB`, `Elmo_BgoA` for `Elmo_BLOCKED`), each with **dyadic + solo** trial branches (unless `--dyadic-only`). Same step engine as confederate session lists.
-
-**Input data** (network path):
-
-```
-S:\taskcontroller\SCP_DATA\SCP-CTRL-01\MUA_curated_sessions\
-  Elmo_BLOCKED\
-    20210401T124246.A_Elmo.B_KN.SCP_01\
-    ...
-```
-
-**Conditions** (`MONKEY_CONDITIONS` in [`code/process_channels/preprocess.py`](code/process_channels/preprocess.py)):
-
-| Condition | go_seq runs | Trial filters (per run) |
-|---|---|---|
-| `Elmo_BLOCKED` / `Curius_BLOCKED` | `{Monkey}_AgoB`, `{Monkey}_BgoA` | Dyadic + `{AgoB\|BgoA}` + actor-side RA/RB tiers + `conf_predictability=Blocked` |
-| `Elmo_SHUFFLED` / `Curius_SHUFFLED` | same | same with `Shuffled` |
-
-L/R split: actor-side choice from session ID (`choice_config_for_recording`); e.g. `A_Elmo` sessions → `A_LR_pos_list` (`Al`/`Ar`), not monkey-name defaults.
+Default processing is z-scored (actor-trial μ/σ per channel). `--also-original` also writes raw under `original/` (z-scored then under `zscored/`). Caches: `{branch}/.cache/summaries_zscore.npz`.
 
 ```bash
-python -u code/run_scripts/run_curated.py Elmo_BLOCKED
+PYTHONPATH=code python -u code/run_scripts/run_curated.py Elmo_BLOCKED
+PYTHONPATH=code python -u code/run_scripts/run_curated.py Elmo_BLOCKED --go-seq AgoB --dyadic-only
+PYTHONPATH=code python -u code/run_scripts/run_curated.py Elmo_BLOCKED --steps session_lr,consistency
+
+PYTHONPATH=code python -u code/run_scripts/run_session_list.py --list
+PYTHONPATH=code python -u code/run_scripts/run_session_list.py Elmo_BLOCKED_CONF
+PYTHONPATH=code python -u code/run_scripts/run_session_list.py DUAL_NHP --monkey Curius --go-seq BgoA
 ```
 
-**Output layout** — everything under `figures/{CONDITION}/`:
+Decode (separate CLIs, same output tree, `decoding/`):
+
+```bash
+PYTHONPATH=code python -u code/run_scripts/run_decode_curated.py Elmo_BLOCKED --mode dyadic_all
+PYTHONPATH=code python -u code/run_scripts/run_decode_session_list.py Elmo_BLOCKED_CONF --mode dyadic_all
+PYTHONPATH=code python -u code/run_scripts/run_decode_compare.py
+```
+
+### Steps
+
+| Step | Writes |
+|---|---|
+| `session_lr` | Per-session L/R PSTHs |
+| `pref_unpref` | Combined preferred vs unpreferred |
+| `consistency` | SI heatmaps, `channel_stability.csv`, consensus Δ, best/worst dives |
+| `stability_across_sessions` | HTML explorer |
+| `combine` | Per-channel combined L/R |
+| `array_combined` | Array-mean ± SE |
+| `best_worst` | Deep dives (also written by `consistency`) |
+| `comparisons` | AgoB vs BgoA and Dyadic vs Solo overlays |
+
+Partial reruns: `run_session_lr.py`, `run_consistency.py`, `run_combine.py`, `run_array_combined.py`, `run_comparisons.py`, `run_best_worst.py`, `run_stability_across_sessions.py`. Restrict sessions on those scripts with `SESSION_IDS` in the module.
+
+### Curated conditions
+
+Input: `MUA_curated_sessions/{Monkey}_{BLOCKED|SHUFFLED}/{session_id}/`.
+
+| Condition | Timing folders | Trial mask |
+|---|---|---|
+| `Elmo_BLOCKED` / `Curius_BLOCKED` | `{Monkey}_AgoB`, `{Monkey}_BgoA` | Dyadic or actor solos + go-seq + actor reward + `Blocked` |
+| `Elmo_SHUFFLED` / `Curius_SHUFFLED` | same | same with `Shuffled` |
+
+L/R from the session-ID actor side (`choice_config_for_recording`). Confederate `*_CONF` lists use the same splits; DUAL_NHP adds Curius and Elmo (four folders). DUAL_NHP trial mask is Dyadic + go-seq + actor reward.
 
 ```
 figures/Elmo_BLOCKED/
   pipeline.log
-  Elmo_AgoB/
-    Dyadic/
-      .cache/summaries_zscore.npz
-      {session}_..._LR.pdf
-      consistency/
-      combined/
-      stability_across_sessions/
-    SoloA/
-      (same structure)
-  Elmo_BgoA/
-    Dyadic/
-    SoloA/
+  Elmo_AgoB/Dyadic/   Elmo_AgoB/SoloA/
+  Elmo_BgoA/…
+  Elmo_AgoB/Dyadic_vs_SoloA_comparison/
   Elmo_Dyadic_first_second_comparison/
 ```
 
-Add `--also-original` for `Dyadic/original/` and `Dyadic/zscored/` subfolders.
-
-```bash
-python -u code/run_scripts/run_curated.py Elmo_BLOCKED --go-seq AgoB --dyadic-only
-python -u code/run_scripts/run_curated.py Elmo_BLOCKED --steps session_lr,consistency
-python -u code/run_scripts/run_stability_across_sessions.py Elmo_BLOCKED
+```
+{root}/Elmo_BLOCKED_CONF/          # same inner tree
+{root}/DUAL_NHP/Curius_AgoB/…      # plus Elmo_* folders
+  decode_compare/                  # from run_decode_compare.py
 ```
 
-To restrict sessions when running individual steps, set `SESSION_IDS` in [`code/analyze_stability/consistency.py`](code/analyze_stability/consistency.py), [`code/analyze_stability/deep_dives.py`](code/analyze_stability/deep_dives.py), or [`code/run_scripts/replot_consistency.py`](code/run_scripts/replot_consistency.py).
+DUAL_NHP recorded-monkey split: datetime suffix **`U`** or no `B` → Curius; suffix **`B`** → Elmo.
 
----
+### Other commands
 
-### Session-list pipeline — `code/run_scripts/run_session_list.py`
-
-Reads session IDs from [`session_lists.m`](session_lists.m). Each named cell array (e.g. `DUAL_NHP`, `Elmo_BLOCKED_CONF`) defines `root_folder`, sessions, and output path `{root_folder}/{list_name}/`.
-
-**Flat export layout:**
-
-```
-S:\...\MUA_export_per_session\
-  20210127T130717.A_Elmo.B_FS.SCP_01\    ← session folders directly under root_folder
-  ...
-```
-
-Confederate lists (`*_CONF`) use the go-seq split pipeline (see table below). Other flat lists without the confederate naming pattern fall back to a single AgoB-only run via `build_flat_session_list_context`.
-
-**Named lists in [`session_lists.m`](session_lists.m):**
-
-| List | Sessions | Output |
-|---|---|---|
-| `DUAL_NHP` | 8 paired exports | see below |
-| `Elmo_BLOCKED_CONF` | 40 | `{root}/Elmo_BLOCKED_CONF/{Monkey}_{AgoB\|BgoA}/figures/…` |
-| `Elmo_SHUFFLED_CONF` | 13 | `{root}/Elmo_SHUFFLED_CONF/{Monkey}_{AgoB\|BgoA}/figures/…` |
-| `Curius_BLOCKED_CONF` | 22 | `{root}/Curius_BLOCKED_CONF/{Monkey}_{AgoB\|BgoA}/figures/…` |
-| `Curius_SHUFFLED_CONF` | 15 | `{root}/Curius_SHUFFLED_CONF/{Monkey}_{AgoB\|BgoA}/figures/…` |
-| `ElmoBLOCKED_SpikeSortedSessions` | 6 | *(not runnable — name lacks `Elmo_BLOCKED_` prefix)* |
-
-Confederate lists run **two timing splits** (AgoB + BgoA) plus **`comparisons`** (go-sequence and social-context axes), mirroring DUAL_NHP per-monkey layout. Trial filters: Dyadic + `{AgoB|BgoA}` + Blocked/Shuffled + actor-side reward tiers (RA or RB). L/R: actor-side choice field per session (`Al`/`Ar` or `Bl`/`Br`).
-
-**Output layout** (example `Curius_SHUFFLED_CONF`):
-
-```
-{root_folder}/Curius_SHUFFLED_CONF/
-  Curius_AgoB/figures/{original|zscored}/...
-  Curius_BgoA/figures/...
-  Curius_AgoB/figures/zscored/combined/*_arrays_combined_LR.pdf
-  Curius_Dyadic_first_second_comparison/    # comparisons
-```
-
-```bash
-python -u code/run_scripts/run_session_list.py --list
-python -u code/run_scripts/run_session_list.py Curius_SHUFFLED_CONF
-python -u code/run_scripts/run_session_list.py Elmo_BLOCKED_CONF --go-seq BgoA
-python -u code/run_scripts/run_session_list.py Curius_SHUFFLED_CONF --steps session_lr,consistency
-python -u code/run_scripts/audit_conf_sessions.py --all-conf
-python -u code/run_scripts/run_comparisons.py Curius_SHUFFLED_CONF
-```
-
-Validate parsing:
-
-```bash
-cd code && python -m run_scripts.check
-```
-
-**Note:** An older monolithic run may exist at `{root}/{list_name}/figures/` (AgoB-only, pre go-seq split); re-run overwrites nothing there — new outputs go under `{Monkey}_{AgoB|BgoA}/`.
-
-#### DUAL_NHP — paired dual-monkey export
-
-Eight paired sessions (4 dates × 2 spike-sorted exports). Split by **recorded monkey**:
-
-- Datetime suffix **`U`** or no `B` → **Curius** export  
-- Datetime suffix **`B`** → **Elmo** export  
-
-(Future **confederate** lists: only one monkey's neural data — sessions assigned via `.A_Curius.` / `.A_Elmo.` in the ID; empty monkey buckets are skipped.)
-
-**Four analysis runs** (recorded monkey × timing), each with isolated output. L/R and reward follow **actor side per session** (not a fixed field per monkey name):
-
-| Run | go_seq filter | L/R (typical) | Reward (typical) |
-|---|---|---|---|
-| `Curius_AgoB` | AgoB | `A_LR` when Curius is A-side in that session | `A_Reward` RA1–RA4 |
-| `Curius_BgoA` | BgoA | same rule per session | same |
-| `Elmo_AgoB` | AgoB | `B_LR` when Elmo is B-side; `A_LR` when A-side | RB or RA per session |
-| `Elmo_BgoA` | BgoA | same rule per session | same |
-
-Trial filters per run: Dyadic + `{AgoB|BgoA}` + actor-side RA1–RA4 or RB1–RB4 (no `conf_predictability`).
-
-**Output layout:**
-
-```
-{root_folder}/DUAL_NHP/
-  Curius_AgoB/figures/{original|zscored}/...
-  Curius_BgoA/figures/...
-  Elmo_AgoB/figures/...
-  Elmo_BgoA/figures/...
-  {Monkey}_{AgoB|BgoA}/figures/zscored/combined/
-    {Condition}_{event}_A1_combined_LR.pdf      # per-channel panels
-    {Condition}_{event}_arrays_combined_LR.pdf   # array-mean ± SE (array_combined step)
-  {Monkey}_Dyadic_first_second_comparison/             # go-sequence comparison
-    si_scatter.pdf, delta_si_heatmap.pdf, similar10/worst10 deep dives, CSVs, ...
-```
-
-```bash
-# Full pipeline: 4 monkey×timing runs + array plots + first/second comparison
-python -u code/run_scripts/run_session_list.py DUAL_NHP
-
-# Subset
-python -u code/run_scripts/run_session_list.py DUAL_NHP --go-seq AgoB
-python -u code/run_scripts/run_session_list.py DUAL_NHP --monkey Curius --go-seq BgoA
-python -u code/run_scripts/run_session_list.py DUAL_NHP --steps session_lr,consistency
-
-# Partial reruns (one step)
-python -u code/run_scripts/run_array_combined.py DUAL_NHP
-python -u code/run_scripts/run_comparisons.py DUAL_NHP --monkey Curius
-```
-
-**DUAL_NHP CLI flags:** `--monkey {Curius|Elmo}`, `--go-seq {AgoB|BgoA|all}` (default `all`).
-
----
-
-### Individual steps
-
-Re-run a single pipeline step without the full runner:
-
-| Script | Step |
+| Script | Use |
 |---|---|
-| [`code/run_scripts/run_session_lr.py`](code/run_scripts/run_session_lr.py) | `session_lr` |
-| [`code/run_scripts/run_consistency.py`](code/run_scripts/run_consistency.py) | `consistency` |
-| [`code/run_scripts/run_stability_across_sessions.py`](code/run_scripts/run_stability_across_sessions.py) | `stability_across_sessions` |
-| [`code/run_scripts/run_combine.py`](code/run_scripts/run_combine.py) | `combine` |
-| [`code/run_scripts/run_array_combined.py`](code/run_scripts/run_array_combined.py) | `array_combined` |
-| [`code/run_scripts/run_comparisons.py`](code/run_scripts/run_comparisons.py) | `comparisons` |
-| [`code/run_scripts/run_best_worst.py`](code/run_scripts/run_best_worst.py) | `best_worst` |
-| [`code/run_scripts/replot_consistency.py`](code/run_scripts/replot_consistency.py) | Replot heatmaps only |
-| [`code/run_scripts/audit_conf_sessions.py`](code/run_scripts/audit_conf_sessions.py) | Session label audit → `audit/all_conf_audit.csv`, `audit/DUAL_NHP_audit.csv` |
-| [`code/run_scripts/audit_trial_selection.py`](code/run_scripts/audit_trial_selection.py) | Actor-side vs legacy L/R trial counts → `{output}/trial_selection_{AgoB\|BgoA}.csv` |
-
-The runners patch module globals via [`code/run_pipeline/context.py`](code/run_pipeline/context.py) (`PipelineContext`: filters, choice field from `choice_config_for_recording`, `recording_monkey`, paths). DUAL_NHP logic lives in [`code/run_pipeline/dual_nhp.py`](code/run_pipeline/dual_nhp.py).
-
-Default is z-scored only. Pass `--also-original` on any pipeline runner, or set `RUN_BOTH_PROCESSING = True` in [`code/run_pipeline/config.py`](code/run_pipeline/config.py).
-
-### Session audit
-
-Label QC for confederate and DUAL_NHP lists — rewarded trial counts per `TrialSubType`, problems (missing fields, suspicious zero-rewarded counts):
+| `run_decode_curated.py` / `run_decode_session_list.py` | Choice decode |
+| `run_decode_compare.py` | Overlay combined decode caches |
+| `replot_consistency.py` | Rebuild heatmaps |
+| `audit_conf_sessions.py` | Label QC → `audit/` |
+| `audit_trial_selection.py` | Per-session L/R counts |
+| `plan_pipeline.py` / `audit_outputs.py` | Expected files vs disk |
 
 ```bash
-python -u code/run_scripts/audit_conf_sessions.py --all-conf    # 4 _CONF lists → audit/all_conf_audit.csv
-python -u code/run_scripts/audit_conf_sessions.py --dual-nhp    # DUAL_NHP (8 sessions) → audit/DUAL_NHP_audit.csv
-python -u code/run_scripts/audit_conf_sessions.py --list Curius_SHUFFLED_CONF
+python -u code/run_scripts/audit_conf_sessions.py --all-conf
+python -u code/run_scripts/audit_conf_sessions.py --dual-nhp
+cd code && python -m run_scripts.check
+python -m run_scripts.plan_pipeline Elmo_BLOCKED
+python -m run_scripts.audit_outputs ../figures/Elmo_BLOCKED
 ```
-
-CSV columns: `session_id`, `session_pair` (e.g. `A_Curius.B_MK` from the full session ID), `dataset`, `problem`, `n_SoloA`, … `_CONF` lists use list-level recording monkey; **DUAL_NHP** infers Curius vs Elmo export per session (`U`/no suffix → A+RA; `B` suffix → B+RB).
 
 ## Cross-session consistency
 
-Nominal channel IDs (`ch001`–`ch160`) are physical electrode indices and may not reflect the same neural tissue across days (electrode drift). **Channels can be missing** in individual sessions (no file or insufficient trials); the pipeline always uses the fixed A1–A5 layout (ch001–032 … ch129–160), assigns **NaN** where data are absent, and shows **empty labelled axes** in overview plots. Stability metrics use only sessions where that channel had usable data.
+How to read the heatmaps and CSVs: [wiki: Channel stability](https://github.com/igorkagan/BoS-ephys-MUA/wiki/Consistency).
+
+Nominal channel IDs (`ch001`–`ch160`) are physical electrode indices. Missing channels are NaN / empty axes. Stability metrics use sessions where that channel had usable data.
 
 ### Pipeline (what the script computes)
 
@@ -570,7 +456,7 @@ Channels need ≥ `MIN_TRIALS_PER_GROUP` trials per side to contribute statistic
 |---|---|---|
 | **SI** | `(L̄ − R̄) / (abs(L̄) + abs(R̄))` in analysis window | Signed L/R bias. **+** → left-preferring, **−** → right-preferring, **0** → balanced. Bounded in [−1, 1] when L̄, R̄ ≥ 0. |
 | **Δ(t)** | `μ_L(t) − μ_R(t)` at each time point | Full timecourse of L vs R difference; used for shape-based comparisons. |
-| **Mann–Whitney p** | On per-trial window means (L vs R) | Non-parametric test of L/R difference within session. Not corrected for multiple channels. |
+| **Mann–Whitney p** | On per-trial window means (L vs R) | Per session × channel, uncorrected across electrodes. |
 | **Median pairwise r** | Median Pearson r of **Δ(t)** across all session pairs for one channel | **Shape** consistency: do difference-waveforms correlate across days? High r → similar temporal profile; low/negative r → drift or remapping. |
 | **ICC(2,1)** | Two-way random ICC; sessions = raters, time points = targets | **Absolute agreement** of Δ(t) across sessions (includes amplitude). ICC ≥ 0.4 is a common “fair” threshold in config. |
 | **Sign concordance** | Fraction of sessions sharing the majority SI sign | **Direction** stability: does the channel stay left- or right-preferring? Reported as `n_same_sign / n_sessions` in CSV. |
@@ -585,9 +471,10 @@ Channels need ≥ `MIN_TRIALS_PER_GROUP` trials per side to contribute statistic
 
 Figures below live under:
 
-- **Curated:** `figures/{original|zscored}/consistency/{CONDITION}/`
-- **Session-list (flat):** `{root_folder}/{list_name}/figures/{original|zscored}/consistency/`  
-  DUAL_NHP: `{root_folder}/DUAL_NHP/{Monkey}_{AgoB|BgoA}/figures/{original|zscored}/consistency/`
+- **Curated:** `figures/{CONDITION}/{Monkey}_{AgoB|BgoA}/Dyadic/consistency/` (or `SoloA/`)
+- **Session-list:** `{root_folder}/{list_name}/{Monkey}_{AgoB|BgoA}/Dyadic/consistency/`
+
+With `--also-original`, insert `original/` or `zscored/` after the trial-type folder.
 
 Figures are grouped into three tiers: **overview → array-level waveforms → channel diagnostics**.
 
@@ -620,15 +507,13 @@ Use these first to see which channels and sessions are worth inspecting.
 
 ---
 
-### Practical workflow
+### Reading order
 
-1. Run the appropriate runner (`code/run_scripts/run_curated.py {CONDITION}` or `code/run_scripts/run_session_list.py DUAL_NHP`).
-2. **Tier 1:** Scan `si_heatmap.pdf` and `channel_stability.csv`; note channels with high sign concordance but low r (direction stable, shape not).
-3. **Tier 2:** Open `delta_consensus_*.pdf` for arrays with candidate channels; confirm waveform agreement in the analysis window.
-4. **Tier 3:** Use `deep_dive_ch*.pdf` to diagnose failures (gain change vs remapping vs noise).
-5. **Decision:** Pool or average across sessions only for **`stable == True`** channels (or relax criteria explicitly in analysis). Exclude or treat separately all others when using nominal channel IDs.
+1. `si_heatmap.pdf` + `channel_stability.csv` — direction and which electrodes stay put.
+2. `delta_consensus_*.pdf` — waveform agreement in the analysis window.
+3. `deep_dive_ch*.pdf` — per-day L/R when shape disagrees (gain vs remapping vs noise).
 
-Default stability thresholds in script: **median pairwise r ≥ 0.5**, **ICC ≥ 0.4**, **sign concordance ≥ 0.7**. Adjust `R_STABLE_THRESH`, `ICC_STABLE_THRESH`, and `SIGN_CONCORDANCE_THRESH` if your use case needs stricter or looser pooling.
+`stable == True` means median r ≥ 0.5, ICC ≥ 0.4, and sign concordance ≥ 0.7 (`R_STABLE_THRESH`, `ICC_STABLE_THRESH`, `SIGN_CONCORDANCE_THRESH` in the script). Those channels are the straightforward ones to pool across days.
 
 ---
 
@@ -645,22 +530,13 @@ Key settings at the top of [`code/analyze_stability/consistency.py`](code/analyz
 - `DEEP_DIVE_UNSTABLE_ONLY`, `MAX_DEEP_DIVE_CHANNELS` — Tier 3 selection
 - `SHOW_SESSION_TRACES`, `SESSION_COLORMAP` — Tier 2 session overlay appearance
 
-`comparisons` runs once per monkey after the selected go-seq branches. AgoB-vs-BgoA requires `--go-seq all`; Dyadic-vs-Solo runs only for selected go-sequences and is omitted by `--dyadic-only`.
+`comparisons` runs once per monkey after the selected go-seq branches. AgoB vs BgoA needs `--go-seq all`. `--dyadic-only` writes Dyadic branches only.
 
-Every branch writes `pipeline_manifest.json`; every comparison writes
-`comparison_manifest.json` with exact filters, dimensions, source paths, sessions,
-alignment events, and the `B - A` delta definition. Re-check an existing output tree:
+Every branch writes `pipeline_manifest.json`; every comparison writes `comparison_manifest.json` (filters, paths, `B − A` delta).
 
-```bash
-cd code
-python -m run_scripts.plan_pipeline Elmo_BLOCKED
-python -m run_scripts.audit_outputs ../figures/Elmo_BLOCKED
-```
-
-Data-dependent parity tests are opt-in:
+Parity tests that need the network data:
 
 ```bash
 cd code
-$env:BOS_RUN_DATA_TESTS = "1"
-python -m unittest tests.test_curated_trialinfo_vs_export -v
+BOS_RUN_DATA_TESTS=1 python -m unittest tests.test_curated_trialinfo_vs_export -v
 ```

@@ -6,7 +6,7 @@ from pathlib import Path
 
 from analyze_decoding.config import FIGURES_ROOT
 from run_pipeline.dual_nhp import dual_nhp_run_label
-from process_channels.preprocess import recording_monkey_from_condition_label
+from process_channels.preprocess import recording_monkey_for_decode
 
 
 def timing_branch_dir(
@@ -15,9 +15,15 @@ def timing_branch_dir(
     trial_type: str,
     *,
     figures_root: Path | None = None,
+    recording_monkey: str | None = None,
+    session_id: str | None = None,
 ) -> Path:
     root = figures_root if figures_root is not None else FIGURES_ROOT
-    monkey = recording_monkey_from_condition_label(condition)
+    monkey = recording_monkey_for_decode(
+        condition,
+        session_id=session_id or "",
+        recording_monkey=recording_monkey,
+    )
     return root / condition / dual_nhp_run_label(monkey, go_seq) / trial_type
 
 
@@ -28,9 +34,18 @@ def decoding_dir(
     target: str,
     *,
     figures_root: Path | None = None,
+    recording_monkey: str | None = None,
+    session_id: str | None = None,
 ) -> Path:
     return (
-        timing_branch_dir(condition, go_seq, trial_type, figures_root=figures_root)
+        timing_branch_dir(
+            condition,
+            go_seq,
+            trial_type,
+            figures_root=figures_root,
+            recording_monkey=recording_monkey,
+            session_id=session_id,
+        )
         / "decoding"
         / target
     )

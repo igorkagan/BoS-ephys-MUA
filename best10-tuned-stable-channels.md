@@ -2,9 +2,9 @@
 
 How `best10_tuned_stable_chXXX.pdf` files are chosen.
 
-**Modules:** `bos_mua/steps/consistency.py` (automatic on full runs), `bos_mua/steps/best_worst.py` (standalone).
+**Modules:** [`code/analyze_stability/consistency.py`](code/analyze_stability/consistency.py), [`code/analyze_stability/deep_dives.py`](code/analyze_stability/deep_dives.py) / [`code/run_scripts/run_best_worst.py`](code/run_scripts/run_best_worst.py).
 
-See also: [best-and-worst-channels.md](best-and-worst-channels.md) (ranking by Δ-waveform correlation only).
+See also: [best-and-worst-channels.md](best-and-worst-channels.md) (ranking by Δ-waveform correlation only). Wiki: [Consistency](https://github.com/igorkagan/BoS-ephys-MUA/wiki/Consistency).
 
 ---
 
@@ -13,14 +13,14 @@ See also: [best-and-worst-channels.md](best-and-worst-channels.md) (ranking by �
 **Curated:**
 
 ```
-figures/{original,zscored}/consistency/{Elmo_BLOCKED,Elmo_SHUFFLED,Curius_BLOCKED,Curius_SHUFFLED}/
+figures/{CONDITION}/{Monkey}_{AgoB|BgoA}/Dyadic/consistency/
   best10_tuned_stable_chXXX.pdf
 ```
 
-**DUAL_NHP / flat session lists:**
+**DUAL_NHP / confederate lists:**
 
 ```
-{root_folder}/DUAL_NHP/{Monkey}_{AgoB|BgoA}/figures/{original,zscored}/consistency/
+{root_folder}/{list_name}/{Monkey}_{AgoB|BgoA}/Dyadic/consistency/
   best10_tuned_stable_chXXX.pdf
 ```
 
@@ -49,7 +49,7 @@ Nominal ch001–ch160, usable in **≥ `MIN_SESSIONS` (3)** sessions.
 | Tuning floor | `si_median_abs` | ≥ **0.10** |
 | Task engagement | task-evoked (Friedman) | p < α on L or R trials |
 
-Thresholds: `SIGN_CONCORDANCE_THRESH`, `TUNED_STABLE_SI_STD_MAX`, `TUNED_STABLE_SI_ABS_MIN` in `bos_mua/steps/consistency.py`.
+Thresholds: `SIGN_CONCORDANCE_THRESH`, `TUNED_STABLE_SI_STD_MAX`, `TUNED_STABLE_SI_ABS_MIN` in [`code/analyze_stability/consistency.py`](code/analyze_stability/consistency.py).
 
 ---
 

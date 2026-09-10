@@ -2,24 +2,24 @@
 
 How `best10_chXXX.pdf` and `worst10_chXXX.pdf` are chosen in the cross-session consistency pipeline.
 
-**Modules:** `bos_mua/steps/consistency.py` (automatic on full runs), `bos_mua/steps/best_worst.py` (standalone).
+**Modules:** [`code/analyze_stability/consistency.py`](code/analyze_stability/consistency.py) (automatic on full runs), [`code/analyze_stability/deep_dives.py`](code/analyze_stability/deep_dives.py) / [`code/run_scripts/run_best_worst.py`](code/run_scripts/run_best_worst.py) (standalone).
 
 ---
 
 ## Output locations
 
-**Curated** (`scripts/run_curated.py`):
+**Curated** (`code/run_scripts/run_curated.py`):
 
 ```
-figures/{original,zscored}/consistency/{Elmo_BLOCKED,Elmo_SHUFFLED,Curius_BLOCKED,Curius_SHUFFLED}/
+figures/{CONDITION}/{Monkey}_{AgoB|BgoA}/Dyadic/consistency/
   best10_chXXX.pdf
   worst10_chXXX.pdf
 ```
 
-**DUAL_NHP / flat session lists** (`scripts/run_session_list.py`):
+**DUAL_NHP / confederate lists** (`code/run_scripts/run_session_list.py`):
 
 ```
-{root_folder}/DUAL_NHP/{Monkey}_{AgoB|BgoA}/figures/{original,zscored}/consistency/
+{root_folder}/{list_name}/{Monkey}_{AgoB|BgoA}/Dyadic/consistency/
   best10_chXXX.pdf
   worst10_chXXX.pdf
 ```
@@ -44,7 +44,7 @@ For each eligible channel:
 2. For each session pair (i, j), Pearson **r** between Δ waveforms (≥3 overlapping finite time points).
 3. **`median_pairwise_r`** = median of all pairwise r values.
 
-Implementation: `pairwise_correlations()` and `assess_channel_stability()` in `bos_mua/stability.py`.
+Implementation: `pairwise_correlations()` and `assess_channel_stability()` in [`code/analyze_stability/metrics.py`](code/analyze_stability/metrics.py).
 
 ---
 

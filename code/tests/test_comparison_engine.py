@@ -17,6 +17,7 @@ from compare_conditions.compare import (
     branch_output_dir_from_source_path,
     build_comparison_combined_suptitles,
     build_matched_rows,
+    combined_pdf_names,
     dyadic_solo_spec,
     first_second_spec,
     finalize_comparison_manifest,
@@ -29,7 +30,6 @@ from compare_conditions.compare import (
 )
 from load_data.sessions import SessionListConfig
 from load_data.io import ARRAY_NAMES
-from analyze_stability.pref_unpref import comparison_combined_pref_filenames
 from process_channels.features import ChannelSummary
 from run_pipeline.runner import (
     ALL_STEPS,
@@ -65,10 +65,7 @@ def _summary(si: float) -> ChannelSummary:
 def _touch_combined_pdfs(out: Path, spec: ComparisonSpec) -> None:
     combined = out / "combined"
     combined.mkdir(exist_ok=True)
-    for array_name in ARRAY_NAMES:
-        (combined / f"{spec.file_tag}_{array_name}_combined.pdf").touch()
-    (combined / f"arrays_{spec.file_tag}_combined.pdf").touch()
-    for name in comparison_combined_pref_filenames(spec.file_tag):
+    for name in combined_pdf_names(spec.file_tag, spec):
         (combined / name).touch()
 
 

@@ -109,7 +109,7 @@ def process_channel_mua(
 
     n_left = len(left_trials)
     n_right = len(right_trials)
-    if n_left < min_trials and n_right < min_trials:
+    if n_left < min_trials or n_right < min_trials:
         return None
 
     mean_left = np.nanmean(left_trials, axis=0) if n_left else np.full_like(t_ms, np.nan, dtype=float)

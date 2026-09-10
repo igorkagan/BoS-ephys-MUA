@@ -1,0 +1,15 @@
+---
+description: Run long analysis jobs to completion with plain progress; fix and restart without asking the user to check a shell.
+alwaysApply: true
+---
+
+# Run jobs until done
+
+When the user asks to run a pipeline, decode, or any long analysis:
+
+1. Start it. Keep it running until **all requested outputs exist** and the process exited 0.
+2. Talk only in outcomes: started / now on X (N of M) / problem + what you did / all done.
+3. Never mention PIDs, nohup, watchers, log paths, heartbeats, or terminal files unless they ask.
+4. Do not ask them to check the shell, confirm a restart, or ping you.
+5. On crash, OOM, missing file, or bad exit: one sentence what broke, then fix and **restart from cache** (no `--force` unless the outputs themselves are wrong). Repeat until complete.
+6. "Done" means files on disk, not "I launched it". Tell them once when the full request is finished.
